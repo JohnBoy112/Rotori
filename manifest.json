@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Rotori",
+  "version": "1.1",
+  "description": "Rotori Roblox Trading Extension",
+
+  "host_permissions": [
+    "https://www.roblox.com/*",
+    "https://users.roblox.com/*",
+    "https://inventory.roblox.com/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.roblox.com/trades*",
+        "https://www.roblox.com/trade*"
+      ],
+      "js": ["rotoriCounter.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/RotoriLogo.png"],
+      "matches": ["https://www.roblox.com/*"]
+    }
+  ]
+}

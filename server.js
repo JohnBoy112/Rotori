@@ -1184,6 +1184,20 @@ const knownValueForDrop = copy.isValued
   : 0;
 
 const market = await fetchMarketSummary(copy.id, knownValueForDrop);
+
+const forceNoHyperInflated =
+  normalize(copy.name) === normalize("Masked Hood of the Truest Seer");
+
+if (forceNoHyperInflated) {
+  market.projected = false;
+  market.baselineRap = 0;
+  market.isHyperInflated = false;
+  market.hyperBaselineRap = 0;
+  market.hyperPeakRap = 0;
+  market.hyperInflationRatio = 0;
+  market.hyperInflationReason = "Slow low-demand RAP rise, not hyper-inflated.";
+}
+
 copy.marketDemand = tinyRapItem
   ? "N/A"
   : rotoriKnownMarketText(market.demand, copy.demand);
@@ -1238,7 +1252,7 @@ if (tinyRapItem) {
   }
 }
 
-if (market.projected || market.isHyperInflated) {
+if (!forceNoHyperInflated && (market.projected || market.isHyperInflated)) {
   copy.projected = true;
   copy.isProjected = true;
 }

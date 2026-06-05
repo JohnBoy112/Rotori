@@ -331,6 +331,121 @@ function percentile(nums, p) {
 
   return arr[idx];
 }
+function getSalePrice(sale = {}) {
+  return Number(
+    sale.salePrice ||
+    sale.price ||
+    sale.sale_price ||
+    sale.SalePrice ||
+    0
+  ) || 0;
+}
+
+function getOldRap(sale = {}) {
+  return Number(
+    sale.oldRap ||
+    sale.oldRAP ||
+    sale.old_rap ||
+    sale.OldRAP ||
+    0
+  ) || 0;
+}
+
+function getNewRap(sale = {}) {
+  return Number(
+    sale.newRap ||
+    sale.newRAP ||
+    sale.new_rap ||
+    sale.NewRAP ||
+    0
+  ) || 0;
+}
+
+function getSaleDateMs(sale = {}) {
+  const raw =
+    sale.date ||
+    sale.created ||
+    sale.createdAt ||
+    sale.soldAt ||
+    sale.time ||
+    sale.timestamp;
+
+  const num = Number(raw);
+
+  // Your parser stores timestamps in SECONDS.
+  if (Number.isFinite(num) && num > 1000000000 && num < 10000000000) {
+    return num * 1000;
+  }
+
+  // If it ever stores milliseconds.
+  if (Number.isFinite(num) && num >= 10000000000) {
+    return num;
+  }
+
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function shouldIgnoreHyperInflatedBecauseSlowLowDemand(item = {}, sales = [], currentRap = 0, baselineRap = 0) {
+  const demand = String(item.demand || "").toUpperCase();
+  const salesPerDay = Number(item.salesPerDay || item.recentSalesPerDay || item.salesPerDay90 || 0);
+
+  const lowDemandLike =
+    demand.includes("LOW") ||
+    demand.includes("VERY LOW") ||
+    (salesPerDay > 0 && salesPerDay < 0.35);
+
+  if (!lowDemandLike) return false;
+  if (!sales.length || !currentRap || !baselineRap) return false;
+
+  const sorted = [...sales]
+    .filter(s => getSalePrice(s) > 0)
+    .sort((a, b) => getSaleDateMs(b) - getSaleDateMs(a));
+
+  if (sorted.length < 6) return false;
+
+  const newest = sorted[0];
+  const oldest = sorted[sorted.length - 1];
+
+  const newestMs = getSaleDateMs(newest);
+  const oldestMs = getSaleDateMs(oldest);
+  const spanDays = newestMs && oldestMs
+    ? Math.abs(newestMs - oldestMs) / 86400000
+    : 0;
+
+  const oldestRap = getOldRap(oldest) || getNewRap(oldest) || baselineRap;
+  const latestSale = getSalePrice(newest);
+
+  const rapGrowthPct = oldestRap > 0
+    ? (currentRap - oldestRap) / oldestRap
+    : 0;
+
+  const latestSaleSupportsCurrentRap =
+    latestSale >= currentRap * 0.80 &&
+    latestSale <= currentRap * 1.60;
+
+  const recentHighSales = sorted.filter(s => {
+    const saleMs = getSaleDateMs(s);
+    if (!saleMs || !newestMs) return false;
+
+    const daysAgo = Math.abs(newestMs - saleMs) / 86400000;
+    return daysAgo <= 10 && getSalePrice(s) >= baselineRap * 1.80;
+  }).length;
+
+  const trulyExtreme =
+    currentRap >= baselineRap * 2.0 ||
+    latestSale >= baselineRap * 2.25 ||
+    recentHighSales >= 2;
+
+  if (trulyExtreme) return false;
+
+  const slowRise =
+    spanDays >= 30 &&
+    rapGrowthPct <= 0.90 &&
+    latestSaleSupportsCurrentRap;
+
+  return slowRise;
+}
 function detectHyperInflatedFromSales(sales) {
   if (!sales || sales.length < 25) {
     return {
@@ -555,6 +670,24 @@ if (recentStableNearCurrent && olderAlsoNearCurrent && notDumpingFromPeak) {
     hyperPeakRap: peakRap,
     hyperInflationRatio: Number(currentRatio.toFixed(2)),
     hyperInflationReason: ""
+  };
+}
+const hyperDemandGuess = demandFromSales(cleanSales);
+
+if (
+  shouldIgnoreHyperInflatedBecauseSlowLowDemand(
+    { demand: hyperDemandGuess },
+    cleanSales,
+    currentRap,
+    finalBaselineRap
+  )
+) {
+  return {
+    isHyperInflated: false,
+    hyperBaselineRap: 0,
+    hyperPeakRap: peakRap,
+    hyperInflationRatio: Number(finalInflationRatio.toFixed(2)),
+    hyperInflationReason: "Slow low-demand RAP rise, not hyper-inflated."
   };
 }
 

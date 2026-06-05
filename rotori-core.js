@@ -1016,6 +1016,21 @@ function analyzeTradeCore(givingRaw, receivingRaw) {
 
     return item;
   });
+  const blockedFaceItem = [...giving, ...receiving].find(isFaceBlockedItem);
+
+if (blockedFaceItem) {
+  return baseResult({
+    verdict: "❌ Unable to Analyze",
+    tradeType: "FACE ITEM BLOCKED",
+    counterMode: "NO_SIMPLE_COUNTER",
+    counterTarget: 0,
+    reasons: [
+      "face items cant be tracked right now, update coming soon"
+    ]
+  }, giving, receiving, [
+    `${itemLabel(blockedFaceItem)} appears to be a face item / unknown-sale-status item.`
+  ]);
+}
 
   const reasons = [];
   addItemPerformanceNotes(giving, receiving, reasons);

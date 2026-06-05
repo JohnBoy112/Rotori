@@ -3249,35 +3249,25 @@ async function scanInboundTrades() {
       throw new Error("No trade items found.");
     }
 
-    const response = await sendTradeToRotori(giving, receiving, givingRobux, receivingRobux);
-    // Roblox's displayed trade totals are the source of truth for the visible summary.
-// This does NOT add Robux as an item, so it will not mess up 3v4 / upgrade / downgrade shape.
-if (visibleGivingTotal > 0 || visibleReceivingTotal > 0) {
-  const patchedGivingTotal =
-    visibleGivingTotal > 0
-      ? visibleGivingTotal
-      : Number(response.givingTotal || 0);
+const response = await sendTradeToRotori(giving, receiving, givingRobux, receivingRobux);
 
-  const patchedReceivingTotal =
-    visibleReceivingTotal > 0
-      ? visibleReceivingTotal
-      : Number(response.receivingTotal || 0);
+// Roblox's visible trade totals are the source of truth for the panel summary.
+// This does NOT change item count, so it will not mess up upgrade/downgrade shape.
+if (visibleGivingTotal > 0 && visibleReceivingTotal > 0) {
+  response.backendGivingTotal = response.givingTotal;
+  response.backendReceivingTotal = response.receivingTotal;
+  response.backendDiff = response.diff;
 
-  response.givingTotal = patchedGivingTotal;
-  response.receivingTotal = patchedReceivingTotal;
-  response.diff = patchedReceivingTotal - patchedGivingTotal;
+  response.givingTotal = visibleGivingTotal;
+  response.receivingTotal = visibleReceivingTotal;
+  response.diff = visibleReceivingTotal - visibleGivingTotal;
 
-  response.givingRap = patchedGivingTotal;
-  response.receivingRap = patchedReceivingTotal;
-  response.rapDiff = patchedReceivingTotal - patchedGivingTotal;
-
-  // Keep track of hidden page-total adjustment for debugging.
-  response.pageTotalPatch = true;
-  response.pageGivingTotal = visibleGivingTotal;
-  response.pageReceivingTotal = visibleReceivingTotal;
+  response.givingRap = visibleGivingTotal;
+  response.receivingRap = visibleReceivingTotal;
+  response.rapDiff = visibleReceivingTotal - visibleGivingTotal;
 }
 
-    const elapsed = performance.now() - startedAt;
+const elapsed = performance.now() - startedAt;
     const minimumLoadingTime = 700;
 
     if (elapsed < minimumLoadingTime) {

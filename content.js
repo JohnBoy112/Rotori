@@ -1,3 +1,6 @@
+alert("ROT0RI CONTENT.JS ACTIVE " + new Date().toLocaleTimeString());
+console.log("ROT0RI CONTENT.JS ACTIVE", new Date().toISOString());
+
 function isInboundTradesPage() {
   return location.href.includes("roblox.com/trades") &&
          location.href.includes("tab=Inbound");

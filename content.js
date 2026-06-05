@@ -3049,6 +3049,45 @@ function rotoriSumParsedItems(items) {
   }, 0);
 }
 
+function rotoriParseNumberLoose(text) {
+  return Number(String(text || "").replace(/[^\d]/g, "")) || 0;
+}
+
+function rotoriFirstNumberAfterLabel(text, labelRegex) {
+  const str = String(text || "");
+  const match = str.match(labelRegex);
+  if (!match) return 0;
+
+  const after = str.slice(match.index + match[0].length, match.index + match[0].length + 180);
+  const nums = after.match(/[\d,]+/g) || [];
+
+  return nums.length ? rotoriParseNumberLoose(nums[0]) : 0;
+}
+
+function rotoriVisibleTotalFromBlock(blockText) {
+  return rotoriFirstNumberAfterLabel(blockText, /Total Value:/i);
+}
+
+function rotoriSumParsedItemValues(items) {
+  return (items || []).reduce((total, item) => {
+    return total + Number(item?.value || item?.rap || 0);
+  }, 0);
+}
+
+function rotoriSectionBetween(text, startRegex, endRegex) {
+  const str = String(text || "");
+  const startMatch = str.match(startRegex);
+  if (!startMatch) return "";
+
+  const startIndex = startMatch.index + startMatch[0].length;
+  const afterStart = str.slice(startIndex);
+
+  const endMatch = afterStart.match(endRegex);
+  const endIndex = endMatch ? endMatch.index : afterStart.length;
+
+  return afterStart.slice(0, endIndex);
+}
+
 async function scanInboundTrades() {
   const results = document.getElementById("rotori-results");
   const scanButton = document.getElementById("rotori-scan-btn");
@@ -3085,63 +3124,66 @@ async function scanInboundTrades() {
 
     const text = document.body.innerText;
 
-    const giveMatch = text.match(/Items you will give([\s\S]*?)Total Value:/i);
-    const receiveMatch = text.match(/Items you will receive([\s\S]*?)Total Value:/i);
-
-    const givingRaw = giveMatch ? giveMatch[1].trim() : "";
-    let receivingRaw = receiveMatch ? receiveMatch[1].trim() : "";
-
     const currentTradeText = text.slice(
       Math.max(0, text.search(/Trade with/i))
     );
 
-    const givingBlock = rotoriGetSection(
+    const givingFullBlock = rotoriSectionBetween(
       currentTradeText,
       /Items you will give/i,
       /Items you will receive/i
     );
 
-    const receivingBlock = rotoriGetSection(
+    const receivingFullBlock = rotoriSectionBetween(
       currentTradeText,
       /Items you will receive/i,
       /(?:Accept|Counter|Send|Decline|$)/i
     );
 
-    // Roblox already adds Robux Offered into the total,
-    // so do not let the scanner treat Robux as an item.
+    // Item-name scanner should stop before Total Value,
+    // so it does not read totals/robux as fake items.
+    const givingRaw = rotoriSectionBetween(
+      givingFullBlock,
+      /^/i,
+      /Total Value:/i
+    ).trim();
+
+    let receivingRaw = rotoriSectionBetween(
+      receivingFullBlock,
+      /^/i,
+      /Total Value:/i
+    ).trim();
+
     receivingRaw = receivingRaw
       .replace(/Robux Offered[\s\S]*$/i, "")
       .trim();
 
     const giving = cleanTradeItems(givingRaw);
     const receiving = cleanTradeItems(receivingRaw);
+
     const givingDetails = parseTradeItemsWithRap(givingRaw);
     const receivingDetails = parseTradeItemsWithRap(receivingRaw);
 
-    const visibleGivingTotal = rotoriVisibleTotalFromSection(givingBlock);
-    const visibleReceivingTotal = rotoriVisibleTotalFromSection(receivingBlock);
+    // Use Roblox's real displayed totals as truth.
+    const visibleGivingTotal = rotoriVisibleTotalFromBlock(givingFullBlock);
+    const visibleReceivingTotal = rotoriVisibleTotalFromBlock(receivingFullBlock);
 
-    const givingItemTotal = rotoriSumParsedItems(givingDetails);
-    const receivingItemTotal = rotoriSumParsedItems(receivingDetails);
+    const givingItemTotal = rotoriSumParsedItemValues(givingDetails);
+    const receivingItemTotal = rotoriSumParsedItemValues(receivingDetails);
 
-    const givingRobuxFromTotal = Math.max(0, visibleGivingTotal - givingItemTotal);
-    const receivingRobuxFromTotal = Math.max(0, visibleReceivingTotal - receivingItemTotal);
+    // This catches Robux without caring where Roblox puts the "70" text.
+    const givingRobux = Math.max(0, visibleGivingTotal - givingItemTotal);
+    const receivingRobux = Math.max(0, visibleReceivingTotal - receivingItemTotal);
 
-    const givingRobuxFromLabel = rotoriParseRobuxFromSideText(givingBlock, true);
-    const receivingRobuxFromLabel = rotoriParseRobuxFromSideText(receivingBlock, false);
-
-    const givingRobux = Math.max(givingRobuxFromLabel, givingRobuxFromTotal);
-    const receivingRobux = Math.max(receivingRobuxFromLabel, receivingRobuxFromTotal);
-
-    console.log("ROT0RI ROBUX DEBUG:", {
+    console.log("ROT0RI TOTAL DEBUG:", {
       visibleGivingTotal,
       givingItemTotal,
-      givingRobuxFromTotal,
-      givingRobuxFromLabel,
       givingRobux,
       visibleReceivingTotal,
       receivingItemTotal,
-      receivingRobux
+      receivingRobux,
+      giving,
+      receiving
     });
 
     if (!giving.length && !receiving.length) {

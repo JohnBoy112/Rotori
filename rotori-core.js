@@ -944,14 +944,19 @@ return {
 };
   }
 function baseResult(partial, giving, receiving, extraReasons) {
-  const givingTotal = sum(giving, tradeMetric);
-  const receivingTotal = sum(receiving, tradeMetric);
+  const givingRobux = n(giving.rotoriRobux);
+  const receivingRobux = n(receiving.rotoriRobux);
+
+  const givingTotal = sum(giving, tradeMetric) + givingRobux;
+  const receivingTotal = sum(receiving, tradeMetric) + receivingRobux;
   const diff = receivingTotal - givingTotal;
-  const givingRap = sum(giving, i => n(i.rap));
-  const receivingRap = sum(receiving, i => n(i.rap));
+  const givingRap = sum(giving, i => n(i.rap)) + givingRobux;
+  const receivingRap = sum(receiving, i => n(i.rap)) + receivingRobux;
   const rapDiff = receivingRap - givingRap;
 
   return {
+    givingRobux,
+    receivingRobux,
     verdict: partial.verdict,
     tradeType: partial.tradeType,
     giving,
@@ -1024,7 +1029,7 @@ dropLowSaleDetected: !!item.dropLowSaleDetected,
 dropReason: item.dropReason || ""
   };
 }
-function analyzeTradeCore(givingRaw, receivingRaw) {
+function analyzeTradeCore(givingRaw, receivingRaw, options = {}) {
   const giving = (givingRaw || []).map(cleanItem).map(item => {
     // If WE own the hyper-inflated item, do NOT deflate our outgoing RAP.
     // Rotori should warn us to trade it off, but should not make lowballs look good.
@@ -1061,6 +1066,12 @@ function analyzeTradeCore(givingRaw, receivingRaw) {
 
     return item;
   });
+
+  const givingRobux = n(options.givingRobux);
+  const receivingRobux = n(options.receivingRobux);
+
+  giving.rotoriRobux = givingRobux;
+  receiving.rotoriRobux = receivingRobux;
 
 const blockedFaceItem = [...giving, ...receiving].find(isFaceBlockedItem);
 
@@ -1104,7 +1115,7 @@ if (blockedFaceItem) {
     const anchor = biggestBy(giving, shapeMetric);
 const baseRequired = expectedOpDowngrade(anchor);
 
-    const incomingBase = sum(receiving, effectiveMetric);
+    const incomingBase = sum(receiving, effectiveMetric) + receivingRobux;
 
     const eligibleIncomingValueOP = sum(receiving, i => {
   if (!i.isValued || !anchor) return 0;
@@ -1158,7 +1169,7 @@ const baseRequired = expectedOpDowngrade(anchor);
 const required = downgradeAdjustment.required;
 
     const effectiveIncoming = incomingBase + eligibleIncomingValueOP + incomingRapOP;
-    const opReceived = effectiveIncoming - sum(giving, effectiveMetric);
+    const opReceived = effectiveIncoming - (sum(giving, effectiveMetric) + givingRobux);
 const gap = required - opReceived;
 
 const hasProjectedDowngradeRisk =
@@ -1251,10 +1262,12 @@ const effectivePay = sum(giving, item => {
   return base;
 });
 
-const effectiveReceive = sum(receiving, effectiveMetric);
+const effectiveReceive = sum(receiving, effectiveMetric) + receivingRobux;
 
-const opPaid = Math.max(0, effectivePay - effectiveReceive);
-const opGained = Math.max(0, effectiveReceive - effectivePay);
+const effectivePayWithRobux = effectivePay + givingRobux;
+
+const opPaid = Math.max(0, effectivePayWithRobux - effectiveReceive);
+const opGained = Math.max(0, effectiveReceive - effectivePayWithRobux);
 let maxAllowedOp = expectedOpUpgrade(target, giveCount, receiveCount);
 const normalMaxAllowedOp = maxAllowedOp;
 const projectedGive = giving.filter(i =>
@@ -1269,9 +1282,9 @@ const projectedReceive = receiving.filter(i =>
   safeProjectedRap(i) > 0
 );
 
-const netAfterDeproj = effectiveReceive - effectivePay;
+const netAfterDeproj = effectiveReceive - effectivePayWithRobux;
 
-if (projectedGive.length && netAfterDeproj >= Math.max(500, Math.round(effectivePay * 0.03))) {
+if (projectedGive.length && netAfterDeproj >= Math.max(500, Math.round(effectivePayWithRobux * 0.03))) {
   return baseResult({
     verdict: "✅ Accept upgrade (projected flip profit)",
     tradeType,

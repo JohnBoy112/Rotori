@@ -1501,7 +1501,12 @@ async function getProjectedSalesInfo(itemId) {
 
 app.post("/analyze-trade", async (req, res) => {
   try {
-    const { giving, receiving } = req.body;
+    const {
+      giving,
+      receiving,
+      givingRobux = 0,
+      receivingRobux = 0
+    } = req.body;
 
     const resolvedGivingRaw = (giving || [])
       .map(findItem)
@@ -1516,7 +1521,11 @@ app.post("/analyze-trade", async (req, res) => {
 
     const result = analyzeTradeCore(
       resolvedGiving,
-      resolvedReceiving
+      resolvedReceiving,
+      {
+        givingRobux: Number(givingRobux || 0),
+        receivingRobux: Number(receivingRobux || 0)
+      }
     );
 
     res.json({

@@ -2808,7 +2808,7 @@ function renderTradeResult(response, giving, receiving) {
   `;
 }
 
-async function sendTradeToRotori(giving, receiving) {
+async function sendTradeToRotori(giving, receiving, givingRobux = 0, receivingRobux = 0) {
   const response = await fetch("http://localhost:3000/analyze-trade", {
     method: "POST",
     headers: {
@@ -2816,7 +2816,9 @@ async function sendTradeToRotori(giving, receiving) {
     },
     body: JSON.stringify({
       giving,
-      receiving
+      receiving,
+      givingRobux,
+      receivingRobux
     })
   });
 
@@ -2943,6 +2945,22 @@ function parseRobloxNumberLine(line) {
   return Number(cleaned) || 0;
 }
 
+function rotoriParseRobuxFromSideText(sideText, isOutgoingSide) {
+  const match = String(sideText || "").match(/Robux Offered\s*\(After 30% fee\):\s*([\d,]+)/i);
+  if (!match) return 0;
+
+  const afterFee = Number(match[1].replace(/,/g, "")) || 0;
+
+  // If WE are giving Robux, Roblox total counts the full gross amount.
+  // Example: after fee 70 = 100 Robux offered.
+  if (isOutgoingSide) {
+    return Math.round(afterFee / 0.7);
+  }
+
+  // If WE are receiving Robux, we only receive after-fee amount.
+  return afterFee;
+}
+
 function parseTradeItemsWithRap(rawText) {
   const lines = String(rawText || "")
     .split("\n")
@@ -3031,6 +3049,9 @@ async function scanInboundTrades() {
     const givingRaw = giveMatch ? giveMatch[1].trim() : "";
     let receivingRaw = receiveMatch ? receiveMatch[1].trim() : "";
 
+    const givingRobux = rotoriParseRobuxFromSideText(givingRaw, true);
+    const receivingRobux = rotoriParseRobuxFromSideText(receivingRaw, false);
+
 // Roblox already adds Robux Offered into the receiving total,
 // so do not let the scanner treat Robux as an item.
 receivingRaw = receivingRaw
@@ -3046,7 +3067,7 @@ receivingRaw = receivingRaw
       throw new Error("No trade items found.");
     }
 
-    const response = await sendTradeToRotori(giving, receiving);
+    const response = await sendTradeToRotori(giving, receiving, givingRobux, receivingRobux);
 
     const elapsed = performance.now() - startedAt;
     const minimumLoadingTime = 700;

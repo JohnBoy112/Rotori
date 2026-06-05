@@ -40,6 +40,51 @@ function normalizeDemand(value) {
 
   return d;
 }
+function isFaceBlockedItem(item = {}) {
+  const saleStatus = String(
+    item.saleStatus ||
+    item.salesStatus ||
+    item.status ||
+    item.salesText ||
+    item.activity ||
+    item.saleActivity ||
+    item.saleStatusText ||
+    ""
+  ).toLowerCase();
+
+  const typeText = String(
+    item.assetType ||
+    item.assetTypeName ||
+    item.type ||
+    item.category ||
+    item.itemType ||
+    ""
+  ).toLowerCase();
+
+  const name = String(item.name || "").toLowerCase();
+
+  if (item.isUnknownSaleStatus || item.unknownSaleStatus) return true;
+  if (saleStatus.includes("unknown")) return true;
+  if (typeText.includes("face")) return true;
+
+  if (
+    name.includes("mermaid princess") ||
+    name.includes("pink mermaid princess") ||
+    name.includes("purple mermaid") ||
+    name.includes("face") ||
+    name.includes("smile") ||
+    name.includes("wink") ||
+    name.includes("eyes") ||
+    name.includes("mouth") ||
+    name.includes("prankster") ||
+    name.includes("tattletale") ||
+    name.includes("yum")
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 function normalizeTrend(value) {
   if (typeof value === "number") {
@@ -1016,52 +1061,8 @@ function analyzeTradeCore(givingRaw, receivingRaw) {
 
     return item;
   });
-  function isFaceBlockedItem(item = {}) {
-  const saleStatus = String(
-    item.saleStatus ||
-    item.salesStatus ||
-    item.status ||
-    item.salesText ||
-    item.activity ||
-    item.saleActivity ||
-    item.saleStatusText ||
-    ""
-  ).toLowerCase();
 
-  const typeText = String(
-    item.assetType ||
-    item.assetTypeName ||
-    item.type ||
-    item.category ||
-    item.itemType ||
-    ""
-  ).toLowerCase();
-
-  const name = String(item.name || "").toLowerCase();
-
-  if (item.isUnknownSaleStatus || item.unknownSaleStatus) return true;
-  if (saleStatus.includes("unknown")) return true;
-  if (typeText.includes("face")) return true;
-
-  // Known face fallback names.
-  if (
-    name.includes("mermaid princess") ||
-    name.includes("pink mermaid princess") ||
-    name.includes("purple mermaid") ||
-    name.includes("face") ||
-    name.includes("smile") ||
-    name.includes("wink") ||
-    name.includes("eyes") ||
-    name.includes("mouth") ||
-    name.includes("prankster") ||
-    name.includes("tattletale") ||
-    name.includes("yum")
-  ) {
-    return true;
-  }
-
-  return false;
-}
+const blockedFaceItem = [...giving, ...receiving].find(isFaceBlockedItem);
 
 if (blockedFaceItem) {
   return baseResult({

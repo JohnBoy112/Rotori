@@ -2883,6 +2883,13 @@ async function sendTradeToRotori(giving, receiving, givingRobux = 0, receivingRo
 
   return await response.json();
 }
+alert(JSON.stringify({
+  visibleGivingTotal,
+  visibleReceivingTotal,
+  givingRobux,
+  backendGivingTotal: response.givingTotal,
+  backendReceivingTotal: response.receivingTotal
+}, null, 2));
 function rotoriNumberFromText(text, regex) {
   const match = String(text || "").match(regex);
   if (!match) return 0;

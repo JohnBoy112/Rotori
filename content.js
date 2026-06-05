@@ -2756,10 +2756,69 @@ function renderReasons(reasons) {
   `;
 }
 
+function rotoriGetRobloxDisplayedTradeTotals() {
+  const text = document.body.innerText || "";
+
+  const currentTradeText = text.slice(
+    Math.max(0, text.search(/Trade with/i))
+  );
+
+  function sectionBetween(source, startRegex, endRegex) {
+    const start = source.match(startRegex);
+    if (!start) return "";
+
+    const afterStart = source.slice(start.index + start[0].length);
+    const end = afterStart.match(endRegex);
+
+    return afterStart.slice(0, end ? end.index : afterStart.length);
+  }
+
+  function totalFromSection(sectionText) {
+    const totalMatch = String(sectionText || "").match(/Total Value:\s*([\s\S]{0,180})/i);
+    if (!totalMatch) return 0;
+
+    const nums = String(totalMatch[1]).match(/[\d,]+/g) || [];
+    if (!nums.length) return 0;
+
+    return Number(nums[0].replace(/,/g, "")) || 0;
+  }
+
+  const givingSection = sectionBetween(
+    currentTradeText,
+    /Items you will give/i,
+    /Items you will receive/i
+  );
+
+  const receivingSection = sectionBetween(
+    currentTradeText,
+    /Items you will receive/i,
+    /(?:Accept|Counter|Send|Decline|$)/i
+  );
+
+  return {
+    givingTotal: totalFromSection(givingSection),
+    receivingTotal: totalFromSection(receivingSection)
+  };
+}
+
 function renderTradeResult(response, giving, receiving) {
   injectRotoriMarketCardStyles();
   injectRotoriItemModalStyles();
   ensureRotoriItemModalDelegation();
+
+  const pageTotals = rotoriGetRobloxDisplayedTradeTotals();
+
+  const displayGivingTotal =
+    pageTotals.givingTotal > 0
+      ? pageTotals.givingTotal
+      : Number(response.givingTotal || 0);
+
+  const displayReceivingTotal =
+    pageTotals.receivingTotal > 0
+      ? pageTotals.receivingTotal
+      : Number(response.receivingTotal || 0);
+
+  const displayDiff = displayReceivingTotal - displayGivingTotal;
 
   const verdict = response.verdict || "No verdict returned";
 
@@ -2787,17 +2846,17 @@ function renderTradeResult(response, giving, receiving) {
 
         <div class="rotori-stat">
           <div class="rotori-stat-label">Difference</div>
-          <div class="rotori-stat-value">${rotoriFmt(response.diff)}</div>
+          <div class="rotori-stat-value">${rotoriFmt(displayDiff)}</div>
         </div>
 
         <div class="rotori-stat">
           <div class="rotori-stat-label">Giving</div>
-          <div class="rotori-stat-value">${rotoriFmt(response.givingTotal)}</div>
+          <div class="rotori-stat-value">${rotoriFmt(displayGivingTotal)}</div>
         </div>
 
         <div class="rotori-stat">
           <div class="rotori-stat-label">Receiving</div>
-          <div class="rotori-stat-value">${rotoriFmt(response.receivingTotal)}</div>
+          <div class="rotori-stat-value">${rotoriFmt(displayReceivingTotal)}</div>
         </div>
       </div>
 

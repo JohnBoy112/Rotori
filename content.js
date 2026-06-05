@@ -3016,6 +3016,39 @@ function parseTradeItemsWithRap(rawText) {
   return items;
 }
 
+function rotoriNumberFromAnyText(text) {
+  return Number(String(text || "").replace(/[^\d]/g, "")) || 0;
+}
+
+function rotoriGetSection(text, startRegex, endRegex) {
+  const startMatch = text.match(startRegex);
+  if (!startMatch) return "";
+
+  const startIndex = startMatch.index + startMatch[0].length;
+  const rest = text.slice(startIndex);
+
+  const endMatch = rest.match(endRegex);
+  const endIndex = endMatch ? endMatch.index : rest.length;
+
+  return rest.slice(0, endIndex);
+}
+
+function rotoriVisibleTotalFromSection(sectionText) {
+  const match = String(sectionText || "").match(/Total Value:\s*([\s\S]{0,120})/i);
+  if (!match) return 0;
+
+  const nums = String(match[1]).match(/[\d,]+/g) || [];
+  if (!nums.length) return 0;
+
+  return rotoriNumberFromAnyText(nums[0]);
+}
+
+function rotoriSumParsedItems(items) {
+  return (items || []).reduce((sum, item) => {
+    return sum + Number(item?.value || item?.rap || 0);
+  }, 0);
+}
+
 async function scanInboundTrades() {
   const results = document.getElementById("rotori-results");
   const scanButton = document.getElementById("rotori-scan-btn");
@@ -3062,31 +3095,54 @@ async function scanInboundTrades() {
       Math.max(0, text.search(/Trade with/i))
     );
 
-    const givingRobuxBlockMatch = currentTradeText.match(/Items you will give([\s\S]*?)Items you will receive/i);
-    const receivingRobuxBlockMatch = currentTradeText.match(/Items you will receive([\s\S]*?)(?:Accept|Counter|Send|Decline|$)/i);
+    const givingBlock = rotoriGetSection(
+      currentTradeText,
+      /Items you will give/i,
+      /Items you will receive/i
+    );
 
-    const givingRobuxBlock = givingRobuxBlockMatch ? givingRobuxBlockMatch[1] : givingRaw;
-    const receivingRobuxBlock = receivingRobuxBlockMatch ? receivingRobuxBlockMatch[1] : receivingRaw;
+    const receivingBlock = rotoriGetSection(
+      currentTradeText,
+      /Items you will receive/i,
+      /(?:Accept|Counter|Send|Decline|$)/i
+    );
 
-    const givingRobux = rotoriParseRobuxFromSideText(givingRobuxBlock, true);
-    const receivingRobux = rotoriParseRobuxFromSideText(receivingRobuxBlock, false);
-
-    console.log("ROT0RI ROBUX DEBUG:", {
-      givingRobux,
-      receivingRobux,
-      givingRobuxBlock
-    });
-
-// Roblox already adds Robux Offered into the receiving total,
-// so do not let the scanner treat Robux as an item.
-receivingRaw = receivingRaw
-  .replace(/Robux Offered[\s\S]*$/i, "")
-  .trim();
+    // Roblox already adds Robux Offered into the total,
+    // so do not let the scanner treat Robux as an item.
+    receivingRaw = receivingRaw
+      .replace(/Robux Offered[\s\S]*$/i, "")
+      .trim();
 
     const giving = cleanTradeItems(givingRaw);
     const receiving = cleanTradeItems(receivingRaw);
     const givingDetails = parseTradeItemsWithRap(givingRaw);
     const receivingDetails = parseTradeItemsWithRap(receivingRaw);
+
+    const visibleGivingTotal = rotoriVisibleTotalFromSection(givingBlock);
+    const visibleReceivingTotal = rotoriVisibleTotalFromSection(receivingBlock);
+
+    const givingItemTotal = rotoriSumParsedItems(givingDetails);
+    const receivingItemTotal = rotoriSumParsedItems(receivingDetails);
+
+    const givingRobuxFromTotal = Math.max(0, visibleGivingTotal - givingItemTotal);
+    const receivingRobuxFromTotal = Math.max(0, visibleReceivingTotal - receivingItemTotal);
+
+    const givingRobuxFromLabel = rotoriParseRobuxFromSideText(givingBlock, true);
+    const receivingRobuxFromLabel = rotoriParseRobuxFromSideText(receivingBlock, false);
+
+    const givingRobux = Math.max(givingRobuxFromLabel, givingRobuxFromTotal);
+    const receivingRobux = Math.max(receivingRobuxFromLabel, receivingRobuxFromTotal);
+
+    console.log("ROT0RI ROBUX DEBUG:", {
+      visibleGivingTotal,
+      givingItemTotal,
+      givingRobuxFromTotal,
+      givingRobuxFromLabel,
+      givingRobux,
+      visibleReceivingTotal,
+      receivingItemTotal,
+      receivingRobux
+    });
 
     if (!giving.length && !receiving.length) {
       throw new Error("No trade items found.");

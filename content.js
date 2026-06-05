@@ -2946,18 +2946,27 @@ function parseRobloxNumberLine(line) {
 }
 
 function rotoriParseRobuxFromSideText(sideText, isOutgoingSide) {
-  const match = String(sideText || "").match(/Robux Offered\s*\(After 30% fee\):\s*([\d,]+)/i);
-  if (!match) return 0;
+  const text = String(sideText || "");
 
-  const afterFee = Number(match[1].replace(/,/g, "")) || 0;
+  const labelMatch = text.match(/Robux Offered\s*\(After\s*30%\s*fee\):?/i);
+  if (!labelMatch) return 0;
 
-  // If WE are giving Robux, Roblox total counts the full gross amount.
-  // Example: after fee 70 = 100 Robux offered.
+  // Roblox can put the "70" on another line/column after the label.
+  // So grab the first number shortly after the label instead of requiring same-line.
+  const afterLabel = text.slice(labelMatch.index + labelMatch[0].length, labelMatch.index + labelMatch[0].length + 220);
+
+  const numberMatch = afterLabel.match(/([\d,]+)/);
+  if (!numberMatch) return 0;
+
+  const afterFee = Number(numberMatch[1].replace(/,/g, "")) || 0;
+
+  // Outgoing Robux: page shows after-fee, but trade total uses gross.
+  // Example: 70 after fee = 100 offered.
   if (isOutgoingSide) {
     return Math.round(afterFee / 0.7);
   }
 
-  // If WE are receiving Robux, we only receive after-fee amount.
+  // Incoming Robux: you only receive after-fee.
   return afterFee;
 }
 
@@ -3049,8 +3058,24 @@ async function scanInboundTrades() {
     const givingRaw = giveMatch ? giveMatch[1].trim() : "";
     let receivingRaw = receiveMatch ? receiveMatch[1].trim() : "";
 
-    const givingRobux = rotoriParseRobuxFromSideText(givingRaw, true);
-    const receivingRobux = rotoriParseRobuxFromSideText(receivingRaw, false);
+    const currentTradeText = text.slice(
+      Math.max(0, text.search(/Trade with/i))
+    );
+
+    const givingRobuxBlockMatch = currentTradeText.match(/Items you will give([\s\S]*?)Items you will receive/i);
+    const receivingRobuxBlockMatch = currentTradeText.match(/Items you will receive([\s\S]*?)(?:Accept|Counter|Send|Decline|$)/i);
+
+    const givingRobuxBlock = givingRobuxBlockMatch ? givingRobuxBlockMatch[1] : givingRaw;
+    const receivingRobuxBlock = receivingRobuxBlockMatch ? receivingRobuxBlockMatch[1] : receivingRaw;
+
+    const givingRobux = rotoriParseRobuxFromSideText(givingRobuxBlock, true);
+    const receivingRobux = rotoriParseRobuxFromSideText(receivingRobuxBlock, false);
+
+    console.log("ROT0RI ROBUX DEBUG:", {
+      givingRobux,
+      receivingRobux,
+      givingRobuxBlock
+    });
 
 // Roblox already adds Robux Offered into the receiving total,
 // so do not let the scanner treat Robux as an item.

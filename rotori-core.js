@@ -219,7 +219,7 @@ function itemOP(item) {
   // Normal RAP items under 1,000 automatically need at least 85 OP.
   const smallRapMinimumOP =
     realRap > 0 && realRap < 1000
-      ? 85
+      ? 135
       : 0;
 
   const manualRapOP = n(item.rapOverpay || item.rapOP || item.overpay);
@@ -484,7 +484,7 @@ const anchorRapForSmallFloor =
 
 const smallRapMinimumOP =
   anchorRapForSmallFloor > 0 && anchorRapForSmallFloor < 1000
-    ? 85
+    ? 135
     : 0;
 
 const required = Math.max(adjustedRequired, smallRapMinimumOP);

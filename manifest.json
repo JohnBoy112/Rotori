@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Rotori",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Rotori Roblox Trading Extension",
 
   "host_permissions": [
     "https://www.roblox.com/*",
     "https://users.roblox.com/*",
-    "https://inventory.roblox.com/*"
+    "https://inventory.roblox.com/*",
+    "https://rotori.onrender.com/*"
   ],
 
   "content_scripts": [

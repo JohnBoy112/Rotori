@@ -1,5 +1,13 @@
-alert("ROT0RI CONTENT.JS ACTIVE " + new Date().toLocaleTimeString());
-console.log("ROT0RI CONTENT.JS ACTIVE", new Date().toISOString());
+// Ensure `window` exists in non-browser environments to avoid ReferenceError
+if (typeof window === 'undefined') {
+  if (typeof globalThis !== 'undefined') {
+    globalThis.window = globalThis;
+  } else if (typeof global !== 'undefined') {
+    global.window = global;
+  } else if (typeof self !== 'undefined') {
+    self.window = self;
+  }
+}
 
 function isInboundTradesPage() {
   return location.href.includes("roblox.com/trades") &&
@@ -12,7 +20,6 @@ function injectRotoriStyles() {
   const style = document.createElement("style");
   style.id = "rotori-styles";
   style.textContent = `
-  @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap');
 
   #rotori-panel {
     position: fixed;
@@ -2759,69 +2766,10 @@ function renderReasons(reasons) {
   `;
 }
 
-function rotoriGetRobloxDisplayedTradeTotals() {
-  const text = document.body.innerText || "";
-
-  const currentTradeText = text.slice(
-    Math.max(0, text.search(/Trade with/i))
-  );
-
-  function sectionBetween(source, startRegex, endRegex) {
-    const start = source.match(startRegex);
-    if (!start) return "";
-
-    const afterStart = source.slice(start.index + start[0].length);
-    const end = afterStart.match(endRegex);
-
-    return afterStart.slice(0, end ? end.index : afterStart.length);
-  }
-
-  function totalFromSection(sectionText) {
-    const totalMatch = String(sectionText || "").match(/Total Value:\s*([\s\S]{0,180})/i);
-    if (!totalMatch) return 0;
-
-    const nums = String(totalMatch[1]).match(/[\d,]+/g) || [];
-    if (!nums.length) return 0;
-
-    return Number(nums[0].replace(/,/g, "")) || 0;
-  }
-
-  const givingSection = sectionBetween(
-    currentTradeText,
-    /Items you will give/i,
-    /Items you will receive/i
-  );
-
-  const receivingSection = sectionBetween(
-    currentTradeText,
-    /Items you will receive/i,
-    /(?:Accept|Counter|Send|Decline|$)/i
-  );
-
-  return {
-    givingTotal: totalFromSection(givingSection),
-    receivingTotal: totalFromSection(receivingSection)
-  };
-}
-
 function renderTradeResult(response, giving, receiving) {
   injectRotoriMarketCardStyles();
   injectRotoriItemModalStyles();
   ensureRotoriItemModalDelegation();
-
-  const pageTotals = rotoriGetRobloxDisplayedTradeTotals();
-
-  const displayGivingTotal =
-    pageTotals.givingTotal > 0
-      ? pageTotals.givingTotal
-      : Number(response.givingTotal || 0);
-
-  const displayReceivingTotal =
-    pageTotals.receivingTotal > 0
-      ? pageTotals.receivingTotal
-      : Number(response.receivingTotal || 0);
-
-  const displayDiff = displayReceivingTotal - displayGivingTotal;
 
   const verdict = response.verdict || "No verdict returned";
 
@@ -2849,17 +2797,17 @@ function renderTradeResult(response, giving, receiving) {
 
         <div class="rotori-stat">
           <div class="rotori-stat-label">Difference</div>
-          <div class="rotori-stat-value">${rotoriFmt(displayDiff)}</div>
+          <div class="rotori-stat-value">${rotoriFmt(response.diff)}</div>
         </div>
 
         <div class="rotori-stat">
           <div class="rotori-stat-label">Giving</div>
-          <div class="rotori-stat-value">${rotoriFmt(displayGivingTotal)}</div>
+          <div class="rotori-stat-value">${rotoriFmt(response.givingTotal)}</div>
         </div>
 
         <div class="rotori-stat">
           <div class="rotori-stat-label">Receiving</div>
-          <div class="rotori-stat-value">${rotoriFmt(displayReceivingTotal)}</div>
+          <div class="rotori-stat-value">${rotoriFmt(response.receivingTotal)}</div>
         </div>
       </div>
 
@@ -2870,29 +2818,20 @@ function renderTradeResult(response, giving, receiving) {
   `;
 }
 
-async function sendTradeToRotori(giving, receiving, givingRobux = 0, receivingRobux = 0) {
-  const response = await fetch("http://localhost:3000/analyze-trade", {
+async function sendTradeToRotori(giving, receiving) {
+  const response = await fetch("https://rotori.onrender.com/analyze-trade", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
       giving,
-      receiving,
-      givingRobux,
-      receivingRobux
+      receiving
     })
   });
 
   return await response.json();
 }
-alert(JSON.stringify({
-  visibleGivingTotal,
-  visibleReceivingTotal,
-  givingRobux,
-  backendGivingTotal: response.givingTotal,
-  backendReceivingTotal: response.receivingTotal
-}, null, 2));
 function rotoriNumberFromText(text, regex) {
   const match = String(text || "").match(regex);
   if (!match) return 0;
@@ -3014,31 +2953,6 @@ function parseRobloxNumberLine(line) {
   return Number(cleaned) || 0;
 }
 
-function rotoriParseRobuxFromSideText(sideText, isOutgoingSide) {
-  const text = String(sideText || "");
-
-  const labelMatch = text.match(/Robux Offered\s*\(After\s*30%\s*fee\):?/i);
-  if (!labelMatch) return 0;
-
-  // Roblox can put the "70" on another line/column after the label.
-  // So grab the first number shortly after the label instead of requiring same-line.
-  const afterLabel = text.slice(labelMatch.index + labelMatch[0].length, labelMatch.index + labelMatch[0].length + 220);
-
-  const numberMatch = afterLabel.match(/([\d,]+)/);
-  if (!numberMatch) return 0;
-
-  const afterFee = Number(numberMatch[1].replace(/,/g, "")) || 0;
-
-  // Outgoing Robux: page shows after-fee, but trade total uses gross.
-  // Example: 70 after fee = 100 offered.
-  if (isOutgoingSide) {
-    return Math.round(afterFee / 0.7);
-  }
-
-  // Incoming Robux: you only receive after-fee.
-  return afterFee;
-}
-
 function parseTradeItemsWithRap(rawText) {
   const lines = String(rawText || "")
     .split("\n")
@@ -3085,78 +2999,6 @@ function parseTradeItemsWithRap(rawText) {
   return items;
 }
 
-function rotoriNumberFromAnyText(text) {
-  return Number(String(text || "").replace(/[^\d]/g, "")) || 0;
-}
-
-function rotoriGetSection(text, startRegex, endRegex) {
-  const startMatch = text.match(startRegex);
-  if (!startMatch) return "";
-
-  const startIndex = startMatch.index + startMatch[0].length;
-  const rest = text.slice(startIndex);
-
-  const endMatch = rest.match(endRegex);
-  const endIndex = endMatch ? endMatch.index : rest.length;
-
-  return rest.slice(0, endIndex);
-}
-
-function rotoriVisibleTotalFromSection(sectionText) {
-  const match = String(sectionText || "").match(/Total Value:\s*([\s\S]{0,120})/i);
-  if (!match) return 0;
-
-  const nums = String(match[1]).match(/[\d,]+/g) || [];
-  if (!nums.length) return 0;
-
-  return rotoriNumberFromAnyText(nums[0]);
-}
-
-function rotoriSumParsedItems(items) {
-  return (items || []).reduce((sum, item) => {
-    return sum + Number(item?.value || item?.rap || 0);
-  }, 0);
-}
-
-function rotoriParseNumberLoose(text) {
-  return Number(String(text || "").replace(/[^\d]/g, "")) || 0;
-}
-
-function rotoriFirstNumberAfterLabel(text, labelRegex) {
-  const str = String(text || "");
-  const match = str.match(labelRegex);
-  if (!match) return 0;
-
-  const after = str.slice(match.index + match[0].length, match.index + match[0].length + 180);
-  const nums = after.match(/[\d,]+/g) || [];
-
-  return nums.length ? rotoriParseNumberLoose(nums[0]) : 0;
-}
-
-function rotoriVisibleTotalFromBlock(blockText) {
-  return rotoriFirstNumberAfterLabel(blockText, /Total Value:/i);
-}
-
-function rotoriSumParsedItemValues(items) {
-  return (items || []).reduce((total, item) => {
-    return total + Number(item?.value || item?.rap || 0);
-  }, 0);
-}
-
-function rotoriSectionBetween(text, startRegex, endRegex) {
-  const str = String(text || "");
-  const startMatch = str.match(startRegex);
-  if (!startMatch) return "";
-
-  const startIndex = startMatch.index + startMatch[0].length;
-  const afterStart = str.slice(startIndex);
-
-  const endMatch = afterStart.match(endRegex);
-  const endIndex = endMatch ? endMatch.index : afterStart.length;
-
-  return afterStart.slice(0, endIndex);
-}
-
 async function scanInboundTrades() {
   const results = document.getElementById("rotori-results");
   const scanButton = document.getElementById("rotori-scan-btn");
@@ -3193,91 +3035,30 @@ async function scanInboundTrades() {
 
     const text = document.body.innerText;
 
-    const currentTradeText = text.slice(
-      Math.max(0, text.search(/Trade with/i))
-    );
+    const giveMatch = text.match(/Items you will give([\s\S]*?)Total Value:/i);
+    const receiveMatch = text.match(/Items you will receive([\s\S]*?)Total Value:/i);
 
-    const givingFullBlock = rotoriSectionBetween(
-      currentTradeText,
-      /Items you will give/i,
-      /Items you will receive/i
-    );
+    const givingRaw = giveMatch ? giveMatch[1].trim() : "";
+    let receivingRaw = receiveMatch ? receiveMatch[1].trim() : "";
 
-    const receivingFullBlock = rotoriSectionBetween(
-      currentTradeText,
-      /Items you will receive/i,
-      /(?:Accept|Counter|Send|Decline|$)/i
-    );
-
-    // Item-name scanner should stop before Total Value,
-    // so it does not read totals/robux as fake items.
-    const givingRaw = rotoriSectionBetween(
-      givingFullBlock,
-      /^/i,
-      /Total Value:/i
-    ).trim();
-
-    let receivingRaw = rotoriSectionBetween(
-      receivingFullBlock,
-      /^/i,
-      /Total Value:/i
-    ).trim();
-
-    receivingRaw = receivingRaw
-      .replace(/Robux Offered[\s\S]*$/i, "")
-      .trim();
+// Roblox already adds Robux Offered into the receiving total,
+// so do not let the scanner treat Robux as an item.
+receivingRaw = receivingRaw
+  .replace(/Robux Offered[\s\S]*$/i, "")
+  .trim();
 
     const giving = cleanTradeItems(givingRaw);
     const receiving = cleanTradeItems(receivingRaw);
-
     const givingDetails = parseTradeItemsWithRap(givingRaw);
     const receivingDetails = parseTradeItemsWithRap(receivingRaw);
-
-    // Use Roblox's real displayed totals as truth.
-    const visibleGivingTotal = rotoriVisibleTotalFromBlock(givingFullBlock);
-    const visibleReceivingTotal = rotoriVisibleTotalFromBlock(receivingFullBlock);
-
-    const givingItemTotal = rotoriSumParsedItemValues(givingDetails);
-    const receivingItemTotal = rotoriSumParsedItemValues(receivingDetails);
-
-    // This catches Robux without caring where Roblox puts the "70" text.
-    const givingRobux = Math.max(0, visibleGivingTotal - givingItemTotal);
-    const receivingRobux = Math.max(0, visibleReceivingTotal - receivingItemTotal);
-
-    console.log("ROT0RI TOTAL DEBUG:", {
-      visibleGivingTotal,
-      givingItemTotal,
-      givingRobux,
-      visibleReceivingTotal,
-      receivingItemTotal,
-      receivingRobux,
-      giving,
-      receiving
-    });
 
     if (!giving.length && !receiving.length) {
       throw new Error("No trade items found.");
     }
 
-const response = await sendTradeToRotori(giving, receiving, givingRobux, receivingRobux);
+    const response = await sendTradeToRotori(giving, receiving);
 
-// Roblox's visible trade totals are the source of truth for the panel summary.
-// This does NOT change item count, so it will not mess up upgrade/downgrade shape.
-if (visibleGivingTotal > 0 && visibleReceivingTotal > 0) {
-  response.backendGivingTotal = response.givingTotal;
-  response.backendReceivingTotal = response.receivingTotal;
-  response.backendDiff = response.diff;
-
-  response.givingTotal = visibleGivingTotal;
-  response.receivingTotal = visibleReceivingTotal;
-  response.diff = visibleReceivingTotal - visibleGivingTotal;
-
-  response.givingRap = visibleGivingTotal;
-  response.receivingRap = visibleReceivingTotal;
-  response.rapDiff = visibleReceivingTotal - visibleGivingTotal;
-}
-
-const elapsed = performance.now() - startedAt;
+    const elapsed = performance.now() - startedAt;
     const minimumLoadingTime = 700;
 
     if (elapsed < minimumLoadingTime) {

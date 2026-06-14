@@ -876,12 +876,24 @@ function detectValuedDropRiskFromSales(sales, currentValue) {
     ? Math.max(0, (nowTs - startTs) / 3600)
     : 0;
 
-  const lowSaleDetected = criticalRun.some(s => {
-    const price = Number(s.salePrice || 0);
+ const lowSaleDetected = cleanSales.slice(0, 12).some(s => {
+  const price = Number(s.salePrice || 0);
+  const oldRap = Number(s.oldRap || 0);
+  const newRap = Number(s.newRap || 0);
 
-    // Negative sale, 0 sale, or anything under/equal 1,000 gets the longer guard.
-    return price <= 1000;
-  });
+  const badSale = price <= 0 || price <= 1000;
+  if (!badSale) return false;
+
+  const nearDropLine =
+    newRap <= criticalRapLine + guardGap ||
+    oldRap <= criticalRapLine + guardGap;
+
+  const bigRapHit =
+    oldRap > 0 &&
+    oldRap - newRap >= Math.max(250, Math.round(oldRap * 0.05));
+
+  return nearDropLine || bigRapHit;
+});
 
   const hoursNeeded = lowSaleDetected ? 48 : 24;
   const hoursUntilEligible = Math.max(0, hoursNeeded - hoursCritical);

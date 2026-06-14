@@ -11,7 +11,11 @@ if (typeof window === 'undefined') {
 
 function isInboundTradesPage() {
   return location.href.includes("roblox.com/trades") &&
-         location.href.includes("tab=Inbound");
+    (
+      location.href.includes("tab=Inbound") ||
+      location.href.includes("tab=Outbound") ||
+      location.href.includes("tab=Completed")
+    );
 }
 
 function injectRotoriStyles() {
@@ -2998,6 +3002,92 @@ function parseTradeItemsWithRap(rawText) {
 
   return items;
 }
+function extractSelectedTradeText() {
+  const text = document.body.innerText || "";
+  const isCompleted = location.href.includes("tab=Completed");
+
+  const givingLabels = isCompleted
+    ? ["Items you gave", "Items you will give"]
+    : ["Items you will give", "Items you gave"];
+
+  const receivingLabels = isCompleted
+    ? ["Items you received", "Items you will receive"]
+    : ["Items you will receive", "Items you received"];
+
+  function findLabel(labels, fromIndex = 0) {
+    const lower = text.toLowerCase();
+    let best = null;
+
+    for (const label of labels) {
+      const index = lower.indexOf(label.toLowerCase(), fromIndex);
+
+      if (index !== -1 && (!best || index < best.index)) {
+        best = { label, index };
+      }
+    }
+
+    return best;
+  }
+
+  function cleanSection(raw) {
+    return String(raw || "")
+      .replace(/Robux Offered[\s\S]*$/i, "")
+      .replace(/After 30% fee[\s\S]*$/i, "")
+      .replace(/Trade Read[\s\S]*$/i, "")
+      .replace(/Analyze Current Trade[\s\S]*$/i, "")
+      .trim();
+  }
+
+  const givingStart = findLabel(givingLabels, 0);
+  if (!givingStart) {
+    return { givingRaw: "", receivingRaw: "" };
+  }
+
+  const receivingStart = findLabel(
+    receivingLabels,
+    givingStart.index + givingStart.label.length
+  );
+
+  if (!receivingStart) {
+    return { givingRaw: "", receivingRaw: "" };
+  }
+
+  const givingRaw = text.slice(
+    givingStart.index + givingStart.label.length,
+    receivingStart.index
+  );
+
+  const afterReceiving = text.slice(
+    receivingStart.index + receivingStart.label.length
+  );
+
+  const endLabels = [
+    "Trade Read",
+    "Analyze Current Trade",
+    "Items you gave",
+    "Items you received",
+    "Items you will give",
+    "Items you will receive"
+  ];
+
+  let endIndex = afterReceiving.length;
+  const lowerAfter = afterReceiving.toLowerCase();
+
+  for (const label of endLabels) {
+    const idx = lowerAfter.indexOf(label.toLowerCase());
+
+    if (idx !== -1 && idx < endIndex) {
+      endIndex = idx;
+    }
+  }
+
+  const receivingRaw = afterReceiving.slice(0, endIndex);
+
+  return {
+    givingRaw: cleanSection(givingRaw),
+    receivingRaw: cleanSection(receivingRaw)
+  };
+}
 
 async function scanInboundTrades() {
   const results = document.getElementById("rotori-results");
@@ -3033,19 +3123,7 @@ async function scanInboundTrades() {
       </div>
     `;
 
-    const text = document.body.innerText;
-
-    const giveMatch = text.match(/Items you will give([\s\S]*?)Total Value:/i);
-    const receiveMatch = text.match(/Items you will receive([\s\S]*?)Total Value:/i);
-
-    const givingRaw = giveMatch ? giveMatch[1].trim() : "";
-    let receivingRaw = receiveMatch ? receiveMatch[1].trim() : "";
-
-// Roblox already adds Robux Offered into the receiving total,
-// so do not let the scanner treat Robux as an item.
-receivingRaw = receivingRaw
-  .replace(/Robux Offered[\s\S]*$/i, "")
-  .trim();
+  const { givingRaw, receivingRaw } = extractSelectedTradeText();
 
     const giving = cleanTradeItems(givingRaw);
     const receiving = cleanTradeItems(receivingRaw);

@@ -150,6 +150,15 @@ function safeRapMetric(item) {
 
   return n(item.rap);
 }
+function isActuallyProjected(item) {
+  return !!(
+    item?.isActualProjected ||
+    (
+      (item?.projected || item?.isProjected) &&
+      !item?.isHyperInflated
+    )
+  );
+}
 function shapeMetric(item) {
   if (!item) return 0;
 
@@ -539,11 +548,11 @@ function itemPerformanceLine(item, side) {
     ? "NEAR RAISING"
     : normalizeTrend(item.trend);
   const health = rapHealth(item);
-  const projected = item.projected || item.isProjected;
+  const actualProjected = isActuallyProjected(item);
 
   const warnings = [];
-  if (item.isHyperInflated) warnings.push("HYPER-INFLATED");
-else if (projected) warnings.push("PROJECTED");
+  if (actualProjected) warnings.push("PROJECTED");
+  else if (item.isHyperInflated) warnings.push("HYPER-INFLATED");
   if (item.isDropping) warnings.push("DROPPING");
   if (isLowDemand(item)) warnings.push("low demand");
   if (isWeakTrend(item)) warnings.push("weak trend");
@@ -563,7 +572,7 @@ function addItemPerformanceNotes(giving, receiving, reasons) {
   ];
 
   for (const [item, side] of all) {
-    if (item.isHyperInflated && item.hyperBaselineRap > 0) {
+    if (item.isHyperInflated && !isActuallyProjected(item) && item.hyperBaselineRap > 0) {
   if (side === "giving" || item.ownedHyperInflated) {
     reasons.push(
       `${itemLabel(item)} looks HYPER-INFLATED: current RAP is ${fmtNum(item.rap)}, and safer historical RAP looks closer to ${fmtNum(item.hyperBaselineRap)}. Since this is on your side, Rotori is NOT lowering your outgoing RAP in the verdict, but you should try to trade it off before it deflates more.`
@@ -1005,6 +1014,7 @@ function cleanItem(item) {
     trend: normalizeTrend(item.trend),
     projected,
     isProjected: projected,
+    isActualProjected: projected,
     baselineRap,
     projectedBaseline: baselineRap,
     isLowRapNow: !!item.isLowRapNow,
@@ -1031,13 +1041,23 @@ dropReason: item.dropReason || ""
 }
 function analyzeTradeCore(givingRaw, receivingRaw, options = {}) {
   const giving = (givingRaw || []).map(cleanItem).map(item => {
-    // If WE own the hyper-inflated item, do NOT deflate our outgoing RAP.
-    // Rotori should warn us to trade it off, but should not make lowballs look good.
+    // Projected wins over hyper-inflated.
+    // If Rolimons says it is projected, do NOT show the hyper-inflated warning.
+    if (item.isHyperInflated && isActuallyProjected(item)) {
+      return {
+        ...item,
+        isHyperInflated: false,
+        ownedHyperInflated: false
+      };
+    }
+
+    // Hyper-only outgoing item: warn, but do not deflate our own side.
     if (item.isHyperInflated && !item.isValued) {
       return {
         ...item,
         projected: false,
         isProjected: false,
+        isActualProjected: false,
         ownedHyperInflated: true
       };
     }
@@ -1046,8 +1066,18 @@ function analyzeTradeCore(givingRaw, receivingRaw, options = {}) {
   });
 
   const receiving = (receivingRaw || []).map(cleanItem).map(item => {
-    // If WE are receiving the hyper-inflated item, keep projected/baseline logic ON.
-    // This makes Rotori deflate the incoming RAP for safety.
+    // Projected wins over hyper-inflated.
+    // If Rolimons says it is projected, keep it projected and hide hyper wording.
+    if (item.isHyperInflated && isActuallyProjected(item)) {
+      return {
+        ...item,
+        isHyperInflated: false,
+        ownedHyperInflated: false
+      };
+    }
+
+    // Hyper-only incoming item: use baseline math for safety,
+    // but still label it as hyper-inflated, not projected.
     if (item.isHyperInflated && !item.isValued) {
       const hyperBaseline = n(
         item.hyperBaselineRap ||
@@ -1059,6 +1089,8 @@ function analyzeTradeCore(givingRaw, receivingRaw, options = {}) {
         ...item,
         projected: true,
         isProjected: true,
+        isActualProjected: false,
+        hyperAdjustedProjection: true,
         baselineRap: hyperBaseline,
         projectedBaseline: hyperBaseline
       };

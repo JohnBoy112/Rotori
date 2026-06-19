@@ -2014,6 +2014,20 @@ function rotoriDisplayDemand(item) {
   );
 }
 
+function rotoriIsActuallyProjected(item) {
+  return !!(
+    item?.isActualProjected ||
+    (
+      (item?.projected || item?.isProjected) &&
+      !item?.isHyperInflated
+    )
+  );
+}
+
+function rotoriIsOnlyHyperInflated(item) {
+  return !!item?.isHyperInflated && !rotoriIsActuallyProjected(item);
+}
+
 function itemWarningText(item) {
   if (item?.noDemandReason) {
     return item.noDemandReason;
@@ -2042,7 +2056,11 @@ const demand = String(
 ).toUpperCase();
   const rapHealth = String(item?.rapHealth || "").toLowerCase();
 
-  if (item?.projected || item?.isProjected) warnings.push("Projected risk");
+  if (rotoriIsActuallyProjected(item)) {
+    warnings.push("Projected risk");
+  } else if (rotoriIsOnlyHyperInflated(item)) {
+    warnings.push("Hyper-inflated risk");
+  }
   if (item?.isDropping) warnings.push("Dropping");
   if (demand.includes("LOW")) warnings.push("Low demand");
   if (trend.includes("LOWER") || trend.includes("DROP")) warnings.push("Weak trend");
@@ -2622,7 +2640,7 @@ const noDemandSet = !!item?.noDemandReason;
 const trend = rotoriDisplayTrend(item);
 const demand = rotoriDisplayDemand(item);
 const isProjectedButton =
-  !!(item?.projected || item?.isProjected || item?.isHyperInflated);
+  rotoriIsActuallyProjected(item) || rotoriIsOnlyHyperInflated(item);
 const overRapChip = rotoriIsValuedOverRap(item)
   ? `<span class="rotori-chip rotori-chip-green">🚀 Over RAP</span>`
   : rotoriIsValuedNearRaising(item)
@@ -2642,7 +2660,7 @@ const overRapChip = rotoriIsValuedOverRap(item)
 
   return `
     <div
-  class="rotori-market-item rotori-market-item-clickable ${(item?.projected || item?.isProjected || item?.isHyperInflated) ? "rotori-market-item-projected" : ""}"
+  class="rotori-market-item rotori-market-item-clickable ${isProjectedButton ? "rotori-market-item-projected" : ""}"
   data-rotori-item-key="${escapeHTML(modalKey)}"
   tabindex="0"
   role="button"

@@ -1878,10 +1878,11 @@ function rotoriAssetThumb(item) {
 function trendIcon(trend) {
   const t = String(trend || "").toUpperCase();
 
+  if (t.includes("NOT RISING") || t.includes("NOT HIGHERING")) return "→";
   if (t.includes("INCREAS") || t.includes("RISING")) return "↗";
   if (t.includes("LOWER") || t.includes("DROP")) return "↘";
   if (t.includes("STABLE") || t.includes("FAIR")) return "→";
-  if (t.includes("LOW DEMAND")) return "!";
+  if (t.includes("LOW DEMAND")) return "▼";
   return "?";
 }
 
@@ -1898,6 +1899,7 @@ function demandIcon(demand) {
 function chipClassForTrend(trend) {
   const t = String(trend || "").toUpperCase();
 
+  if (t.includes("NOT RISING") || t.includes("NOT HIGHERING")) return "rotori-chip-gray";
   if (t.includes("INCREAS") || t.includes("RISING")) return "rotori-chip-green";
   if (t.includes("LOWER") || t.includes("DROP")) return "rotori-chip-red";
   if (t.includes("LOW DEMAND")) return "rotori-chip-orange";

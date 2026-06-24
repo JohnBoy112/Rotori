@@ -1395,8 +1395,10 @@ if (roomDiscount > 0 && weakTargetReasons.length) {
     `Ignored ${fmtNum(ignoredValuedOP)} OP from outgoing item(s) because they are under 80% of ${itemLabel(target)}. Rotori only counts outgoing OP when the item is big enough compared to the main upgrade target.`
   );
 }
-    if (isHighDemand(target) || isGoodTrend(target)) r.push(`${itemLabel(target)} has stronger demand/trend, so it gets a little breathing room.`);
-    if (isLowDemand(target) || isWeakTrend(target) || target?.projected) r.push(`${itemLabel(target)} looks weaker from demand/trend/projected checks, so the max OP is stricter.`);
+    const targetIsWeakForUpgrade =  isLowDemand(target) ||  isWeakTrend(target) ||  target?.projected ||  target?.isProjected;
+    const targetHasRealStrength =  !targetIsWeakForUpgrade &&  (isHighDemand(target) || isGoodTrend(target));
+    if (targetHasRealStrength) {  r.push(`${itemLabel(target)} has strong demand/trend, so it gets a little breathing room.`);} 
+    if (targetIsWeakForUpgrade) {  r.push(`${itemLabel(target)} looks weaker from demand/trend/projected checks, so the max OP is stricter.`);} 
 
     let verdict;
     let counterMode = "NO_SIMPLE_COUNTER";
@@ -1412,10 +1414,7 @@ if (roomDiscount > 0 && weakTargetReasons.length) {
       counterMode = "THEM_SMALL_ADD_OR_REPLACE";
       counterTarget = Math.max(1, opPaid - adjustedAllowedOp);
       r.push(`This is too close to max for a clean flip. You're using about ${Math.round(usage * 100)}% of the OP room.`);
-    } else if (usage <= 0.5 || opGained > 0) {
-      verdict = "✅ Great upgrade";
-      r.push(`This keeps room to flip. You're using about ${Math.round(Math.max(0, usage) * 100)}% of the allowed OP.`);
-    } else {
+    } else if (usage <= 0.5 || opGained > 0) {  verdict = targetIsWeakForUpgrade    ? "✅ Good value upgrade, but weak target"    : "✅ Great upgrade";  if (opGained > 0) {    r.push(`You are not paying OP here — you are gaining about ${fmtNum(opGained)} while upgrading.`);  } else {    r.push(`This keeps room to flip. You're using about ${Math.round(Math.max(0, usage) * 100)}% of the allowed OP.`);  }} else {
       verdict = "⚖️ Fair upgrade";
       r.push(`This is not awful, but it is not a strong profit upgrade. You're using about ${Math.round(usage * 100)}% of OP room.`);
     }

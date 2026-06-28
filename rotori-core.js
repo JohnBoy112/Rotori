@@ -1671,10 +1671,19 @@ else if (giveCount > receiveCount) {
     `Ignored ${fmtNum(ignoredValuedOP)} OP from outgoing item(s) because they are under 80% of ${itemLabel(target)}. Rotori only counts outgoing OP when the item is big enough compared to the main upgrade target.`
   );
 }
-    const targetIsWeakForUpgrade =  isLowDemand(target) ||  isWeakTrend(target) ||  target?.projected ||  target?.isProjected;
-    const targetHasRealStrength =  !targetIsWeakForUpgrade &&  (isHighDemand(target) || isGoodTrend(target));
-    if (targetHasRealStrength) {  r.push(`${itemLabel(target)} has strong demand/trend, so it gets a little breathing room.`);} 
-    if (targetIsWeakForUpgrade) {  r.push(`${itemLabel(target)} looks weaker from demand/trend/projected checks, so the max OP is stricter.`);} 
+   const targetIsWeakForUpgrade = isLowDemand(target) || isWeakTrend(target) || target?.projected || target?.isProjected;
+    const targetHasRealStrength = !targetIsWeakForUpgrade && (isHighDemand(target) || isGoodTrend(target));
+
+    if (targetHasRealStrength) {
+      r.push(`${itemLabel(target)} has strong demand/trend, so it gets a little breathing room.`);
+    }
+
+    // FIX: Only complain about the target being "weaker" if we are actually giving good items away.
+    // If outgoingMostlyMediumPlus is false, it means we're giving small items or low-demand junk,
+    // so any upgrade is a positive move regardless of the target's quality.
+    if (targetIsWeakForUpgrade && outgoingMostlyMediumPlus) {
+      r.push(`${itemLabel(target)} looks weaker from demand/trend/projected checks, so the max OP is stricter.`);
+    }
 
     let verdict;
     let counterMode = "NO_SIMPLE_COUNTER";
@@ -1690,7 +1699,17 @@ else if (giveCount > receiveCount) {
       counterMode = "THEM_SMALL_ADD_OR_REPLACE";
       counterTarget = Math.max(1, opPaid - adjustedAllowedOp);
       r.push(`This is too close to max for a clean flip. You're using about ${Math.round(usage * 100)}% of the OP room.`);
-    } else if (usage <= 0.5 || opGained > 0) {  verdict = targetIsWeakForUpgrade    ? "✅ Good value upgrade, but weak target"    : "✅ Great upgrade";  if (opGained > 0) {    r.push(`You are not paying OP here — you are gaining about ${fmtNum(opGained)} while upgrading.`);  } else {    r.push(`This keeps room to flip. You're using about ${Math.round(Math.max(0, usage) * 100)}% of the allowed OP.`);  }} else {
+    } else if (usage <= 0.5 || opGained > 0) {
+      // FIX: Only label it a "weak target" in the verdict if you were giving good items for it.
+      const showWeakSuffix = targetIsWeakForUpgrade && outgoingMostlyMediumPlus;
+      verdict = showWeakSuffix ? "✅ Good value upgrade, but weak target" : "✅ Great upgrade";
+
+      if (opGained > 0) {
+        r.push(`You are not paying OP here — you are gaining about ${fmtNum(opGained)} while upgrading.`);
+      } else {
+        r.push(`This keeps room to flip. You're using about ${Math.round(Math.max(0, usage) * 100)}% of the allowed OP.`);
+      }
+    } else {
       verdict = "⚖️ Fair upgrade";
       r.push(`This is not awful, but it is not a strong profit upgrade. You're using about ${Math.round(usage * 100)}% of OP room.`);
     }

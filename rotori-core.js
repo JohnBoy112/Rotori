@@ -1122,7 +1122,7 @@ function rotoriPreviousTierInfo(item) {
     item.percentUnderPreviousTier
   );
 
-  if (directHours >= 72) {
+  if (directHours >= 24) {
     return {
       previousRapTierLine: previousTier,
       previousTierHoursUnder: directHours,
@@ -1148,7 +1148,7 @@ function rotoriPreviousTierInfo(item) {
   if (!ordered.length) return null;
 
   const latestTime = ordered[ordered.length - 1].timeMs;
-  const windowHours = 72;
+  const windowHours = 24;
   const cutoff = latestTime - windowHours * 60 * 60 * 1000;
   const recent = ordered.filter(x => x.timeMs >= cutoff);
 
@@ -1170,7 +1170,7 @@ function rotoriPreviousTierInfo(item) {
     ? Math.round((latestTime - continuousUnderSince) / 36e5)
     : 0;
 
-  const qualifies = continuousHours >= 72 || underRatio >= 0.9;
+  const qualifies = continuousHours >= 24 || underRatio >= 0.9;
   if (!qualifies) return null;
 
   return {

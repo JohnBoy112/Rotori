@@ -1036,6 +1036,17 @@ function baseResult(partial, giving, receiving, extraReasons) {
   };
 }
 
+const ROTORI_VALUE_TIER_LINES = [
+  [4000, 3500],
+  [5000, 4000],
+  [6000, 5000],
+  [7000, 6000],
+  [22000, 20000],
+
+  // ADD THE REST OF YOUR REAL VALUE TIERS HERE.
+  // Format: [currentValue, previousRapLine]
+];
+
 function previousRapTierForItem(item) {
   const explicit = n(
     item?.previousRapTier ||
@@ -1049,19 +1060,13 @@ function previousRapTierForItem(item) {
   if (explicit > 0) return explicit;
 
   const value = n(item?.baseValue || item?.value);
-  const op = n(
-    item?.overpay ||
-    item?.valueOverpay ||
-    item?.valueOP
-  );
+  if (!value) return 0;
 
-  // Use the value/OP data your files already have.
-  // Bighead: 4,000 - 500 = 3,500.
-  if (value > 0 && op > 0 && value > op) {
-    return value - op;
-  }
+  const exact = ROTORI_VALUE_TIER_LINES.find(([tierValue]) => {
+    return n(tierValue) === value;
+  });
 
-  return 0;
+  return exact ? n(exact[1]) : 0;
 }
 
 function rotoriParseSaleTimeMs(raw) {

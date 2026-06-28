@@ -585,6 +585,7 @@ function itemPerformanceLine(item, side) {
   if (actualProjected) warnings.push("PROJECTED");
   else if (item.isHyperInflated) warnings.push("HYPER-INFLATED");
   if (item.isDropping) warnings.push("DROPPING");
+  if (item.previousTierDropWatch) warnings.push("previous tier watch");
   if (isLowDemand(item)) warnings.push("low demand");
   if (isWeakTrend(item)) warnings.push("weak trend");
   if (item.isValued && health.includes("critical")) warnings.push("critical under RAP");
@@ -603,6 +604,13 @@ function addItemPerformanceNotes(giving, receiving, reasons) {
   ];
 
   for (const [item, side] of all) {
+    if (item.previousTierDropWatch) {
+      reasons.push(
+        item.previousTierReason ||
+        `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(item.baseValue || item.value)}, RAP ${fmtNum(item.rap)}, and it is struggling under the ${fmtNum(item.previousRapTierLine)} RAP tier.`
+      );
+    }
+
     if (item.isHyperInflated && !isActuallyProjected(item) && item.hyperBaselineRap > 0) {
   if (side === "giving" || item.ownedHyperInflated) {
     reasons.push(
@@ -1027,6 +1035,150 @@ function baseResult(partial, giving, receiving, extraReasons) {
     reasons: [...(extraReasons || []), ...(partial.reasons || [])]
   };
 }
+
+const ROTORI_VALUE_TIERS = [
+  1000, 1600, 2000, 3500, 5000, 7000, 10000, 15000, 20000, 25000, 35000, 50000, 70000, 100000
+];
+
+function previousRapTierForValue(value) {
+  value = n(value);
+  let previous = 0;
+  for (const tier of ROTORI_VALUE_TIERS) {
+    if (tier < value) previous = tier;
+    else break;
+  }
+  return previous;
+}
+
+function rotoriParseSaleTimeMs(raw) {
+  if (typeof raw === "number") {
+    return raw < 10_000_000_000 ? raw * 1000 : raw;
+  }
+
+  const text = String(raw || "").trim();
+  if (!text) return 0;
+
+  const direct = Date.parse(text);
+  if (Number.isFinite(direct)) return direct;
+
+  const match = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+  );
+
+  if (!match) return 0;
+
+  let [, year, month, day, hour, minute, second, ampm] = match;
+  year = Number(year);
+  month = Number(month);
+  day = Number(day);
+  hour = Number(hour);
+  minute = Number(minute);
+  second = Number(second || 0);
+
+  if (ampm) {
+    const p = ampm.toUpperCase();
+    if (p === "PM" && hour < 12) hour += 12;
+    if (p === "AM" && hour === 12) hour = 0;
+  }
+
+  return new Date(year, month - 1, day, hour, minute, second).getTime();
+}
+
+function rotoriSaleTimeMs(sale) {
+  return rotoriParseSaleTimeMs(
+    sale?.time ||
+    sale?.date ||
+    sale?.soldAt ||
+    sale?.createdAt ||
+    sale?.timestamp
+  );
+}
+
+function rotoriSaleNewRap(sale) {
+  return n(
+    sale?.newRap ||
+    sale?.newRAP ||
+    sale?.new_rap ||
+    sale?.newRecentAveragePrice
+  );
+}
+
+function rotoriPreviousTierInfo(item) {
+  if (!item || !item.isValued) return null;
+
+  const value = n(item.baseValue || item.value);
+  const rap = n(item.rap || item.recentAveragePrice);
+  const previousTier = previousRapTierForValue(value);
+
+  if (!value || !rap || !previousTier) return null;
+  if (rap >= previousTier) return null;
+
+  const sales = Array.isArray(item.sales)
+    ? item.sales
+    : Array.isArray(item.recentSales)
+      ? item.recentSales
+      : [];
+
+  const ordered = sales
+    .map(sale => ({
+      timeMs: rotoriSaleTimeMs(sale),
+      newRap: rotoriSaleNewRap(sale)
+    }))
+    .filter(x => x.timeMs > 0 && x.newRap > 0)
+    .sort((a, b) => a.timeMs - b.timeMs);
+
+  if (!ordered.length) return null;
+
+  const latestTime = ordered[ordered.length - 1].timeMs;
+  const windowHours = 72;
+  const cutoff = latestTime - windowHours * 60 * 60 * 1000;
+  const recent = ordered.filter(x => x.timeMs >= cutoff);
+
+  if (recent.length < 5) return null;
+
+  const underCount = recent.filter(x => x.newRap < previousTier).length;
+  const underRatio = underCount / recent.length;
+
+  let continuousUnderSince = 0;
+  for (const entry of ordered) {
+    if (entry.newRap < previousTier) {
+      if (!continuousUnderSince) continuousUnderSince = entry.timeMs;
+    } else {
+      continuousUnderSince = 0;
+    }
+  }
+
+  const continuousHours = continuousUnderSince
+    ? Math.round((latestTime - continuousUnderSince) / 36e5)
+    : 0;
+
+  const qualifies = continuousHours >= 72 || underRatio >= 0.9;
+  if (!qualifies) return null;
+
+  return {
+    previousRapTierLine: previousTier,
+    previousTierHoursUnder: Math.max(continuousHours, windowHours),
+    previousTierWindowHours: windowHours,
+    previousTierUnderPercent: Math.round(underRatio * 100)
+  };
+}
+
+function applyPreviousTierDropWatch(item) {
+  const info = rotoriPreviousTierInfo(item);
+  if (!info) return item;
+
+  return {
+    ...item,
+    previousTierDropWatch: true,
+    previousRapTierLine: info.previousRapTierLine,
+    previousTierHoursUnder: info.previousTierHoursUnder,
+    previousTierWindowHours: info.previousTierWindowHours,
+    previousTierUnderPercent: info.previousTierUnderPercent,
+    previousTierReason:
+      `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(item.baseValue || item.value)}, RAP ${fmtNum(item.rap)}, previous tier ${fmtNum(info.previousRapTierLine)}, and ${fmtNum(info.previousTierUnderPercent)}% of the last ${fmtNum(info.previousTierWindowHours)} hours stayed under that line.`
+  };
+}
+
 function cleanItem(item) {
   const projected = !!(item.projected || item.isProjected);
   const directBaselineRap = n(

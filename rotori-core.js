@@ -1648,19 +1648,20 @@ const headroom = adjustedAllowedOp - opPaid;
     const r = [];
     r.push(`First, this is an upgrade into ${itemLabel(target)}, around ${fmtNum(targetBase)}.`);
    r.push(`You're paying about ${fmtNum(opPaid)} OP on the full trade. The normal max before room discounts is around ${fmtNum(normalMaxAllowedOp)} OP.`);
-   if (shapePatch.reason) {
+// If the shape has a specific patch reason (like 4v1), show that.
+if (shapePatch.reason) {
   r.push(`Upgrade shape check: ${shapePatch.reason}`);
-}
-
-if (roomDiscount > 0 && weakTargetReasons.length) {
-  r.push(
-    `Because ${itemLabel(target)} is ${weakTargetReasons.join(" / ")} and/or the upgrade shape needs room, Rotori lowers the upgrade cap by ${fmtNum(roomDiscount)} OP. New max is ${fmtNum(adjustedAllowedOp)} OP.`
-  );
-} else if (roomDiscount > 0) {
-  r.push(
-    `Because of the ${giveCount}v${receiveCount} upgrade shape, Rotori lowers the upgrade cap by ${fmtNum(roomDiscount)} OP. New max is ${fmtNum(adjustedAllowedOp)} OP.`
-  );
-} else if (giveCount > receiveCount) {
+} 
+// If there was a discount applied, show the discount reason.
+else if (roomDiscount > 0) {
+  if (weakTargetReasons.length) {
+    r.push(`Because ${itemLabel(target)} is ${weakTargetReasons.join(" / ")} and/or the upgrade shape needs room, Rotori lowers the upgrade cap by ${fmtNum(roomDiscount)} OP. New max is ${fmtNum(adjustedAllowedOp)} OP.`);
+  } else {
+    r.push(`Because of the ${giveCount}v${receiveCount} upgrade shape, Rotori lowers the upgrade cap by ${fmtNum(roomDiscount)} OP. New max is ${fmtNum(adjustedAllowedOp)} OP.`);
+  }
+} 
+// Only show the generic "no discount" message if we haven't already pushed a specific shape reason.
+else if (giveCount > receiveCount) {
   r.push(`This ${giveCount}v${receiveCount} upgrade shape does not need a shape discount.`);
 }
 

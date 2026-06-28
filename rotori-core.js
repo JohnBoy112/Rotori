@@ -1036,18 +1036,16 @@ function baseResult(partial, giving, receiving, extraReasons) {
   };
 }
 
-const ROTORI_VALUE_TIERS = [
-  1000, 1600, 2000, 3500, 5000, 7000, 10000, 15000, 20000, 25000, 35000, 50000, 70000, 100000
-];
-
-function previousRapTierForValue(value) {
-  value = n(value);
-  let previous = 0;
-  for (const tier of ROTORI_VALUE_TIERS) {
-    if (tier < value) previous = tier;
-    else break;
-  }
-  return previous;
+function previousRapTierForItem(item) {
+  return n(
+    item?.previousRapTier ||
+    item?.previousRapTierLine ||
+    item?.prevRapTier ||
+    item?.previousValueTier ||
+    item?.previousValueRapTier ||
+    item?.valueTierPreviousRap ||
+    item?.dropCriticalRapLine
+  );
 }
 
 function rotoriParseSaleTimeMs(raw) {
@@ -1108,10 +1106,30 @@ function rotoriPreviousTierInfo(item) {
 
   const value = n(item.baseValue || item.value);
   const rap = n(item.rap || item.recentAveragePrice);
-  const previousTier = previousRapTierForValue(value);
+  const previousTier = previousRapTierForItem(item);
 
   if (!value || !rap || !previousTier) return null;
   if (rap >= previousTier) return null;
+
+  const directHours = n(
+    item.previousTierHoursUnder ||
+    item.hoursUnderPreviousTier ||
+    item.hoursBelowPreviousRapTier
+  );
+  const directPercent = n(
+    item.previousTierUnderPercent ||
+    item.previousTierBelowPercent ||
+    item.percentUnderPreviousTier
+  );
+
+  if (directHours >= 72) {
+    return {
+      previousRapTierLine: previousTier,
+      previousTierHoursUnder: directHours,
+      previousTierWindowHours: directHours,
+      previousTierUnderPercent: directPercent || 100
+    };
+  }
 
   const sales = Array.isArray(item.sales)
     ? item.sales
@@ -1195,7 +1213,7 @@ function cleanItem(item) {
       ? item.recentSales
       : [];
 
-  return {
+  const cleaned = {
     ...item,
     isValued: !!item.isValued || n(item.value || item.baseValue) > 0,
     rap: n(item.rap || item.recentAveragePrice),
@@ -1211,27 +1229,32 @@ function cleanItem(item) {
     preProjectionRap: baselineRap,
     sales,
     recentSales: sales,
+    previousRapTier: n(item.previousRapTier),
+    previousRapTierLine: n(item.previousRapTierLine || item.previousRapTier),
+    previousTierHoursUnder: n(item.previousTierHoursUnder),
+    previousTierWindowHours: n(item.previousTierWindowHours),
+    previousTierUnderPercent: n(item.previousTierUnderPercent),
+    previousTierDropWatch: !!item.previousTierDropWatch,
+    previousTierReason: item.previousTierReason || "",
     isLowRapNow: !!item.isLowRapNow,
     lowAdjustedRap: n(item.lowAdjustedRap),
     lowRapReason: item.lowRapReason || "",
     dropWatch: !!item.dropWatch,
-dropEligible: !!item.dropEligible,
-isDropping: !!item.isDropping || !!item.dropEligible,
-
-dropOriginalValue: n(item.dropOriginalValue || item.baseValue || item.value),
-dropAdjustedValue: n(item.dropAdjustedValue),
-dropValueLoss: n(item.dropValueLoss),
-
-dropCriticalRapLine: n(item.dropCriticalRapLine),
-dropGuardGap: n(item.dropGuardGap),
-
-dropHoursCritical: n(item.dropHoursCritical),
-dropHoursNeeded: n(item.dropHoursNeeded),
-dropHoursUntilEligible: n(item.dropHoursUntilEligible),
-
-dropLowSaleDetected: !!item.dropLowSaleDetected,
-dropReason: item.dropReason || ""
+    dropEligible: !!item.dropEligible,
+    isDropping: !!item.isDropping || !!item.dropEligible,
+    dropOriginalValue: n(item.dropOriginalValue || item.baseValue || item.value),
+    dropAdjustedValue: n(item.dropAdjustedValue),
+    dropValueLoss: n(item.dropValueLoss),
+    dropCriticalRapLine: n(item.dropCriticalRapLine),
+    dropGuardGap: n(item.dropGuardGap),
+    dropHoursCritical: n(item.dropHoursCritical),
+    dropHoursNeeded: n(item.dropHoursNeeded),
+    dropHoursUntilEligible: n(item.dropHoursUntilEligible),
+    dropLowSaleDetected: !!item.dropLowSaleDetected,
+    dropReason: item.dropReason || ""
   };
+
+  return applyPreviousTierDropWatch(cleaned);
 }
 function analyzeTradeCore(givingRaw, receivingRaw, options = {}) {
   const giving = (givingRaw || []).map(cleanItem).map(item => {

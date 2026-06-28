@@ -2038,10 +2038,10 @@ function itemWarningText(item) {
   if (item?.previousTierDropWatch) {
     const value = rotoriFmt(item.baseValue || item.value);
     const rap = rotoriFmt(item.rap || item.recentAveragePrice);
-    const line = rotoriFmt(item.previousRapTierLine);
-    const percent = rotoriFmt(item.previousTierUnderPercent);
+    const line = rotoriFmt(item.previousRapTierLine || item.previousRapTier);
     const hours = rotoriFmt(item.previousTierWindowHours || item.previousTierHoursUnder);
-    return `Previous-tier watch — value ${value}, RAP ${rap}, under the ${line} RAP line for about ${hours} hours / ${percent}% of recent sales.`;
+    const percent = rotoriFmt(item.previousTierUnderPercent);
+    return `Previous-tier watch — value ${value}, RAP ${rap}, under the ${line} RAP line for about ${hours} hours${percent ? ` / ${percent}% of recent sales` : ""}.`;
   }
 
   if (rotoriIsValuedOverRap(item)) {

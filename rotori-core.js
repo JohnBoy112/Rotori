@@ -130,13 +130,50 @@ function tradeMetric(item) {
 
   return safeRapMetric(item);
 }
+function inferProjectedBaselineRap(item) {
+  if (!item) return 0;
+
+  const direct = n(
+    item.baselineRap ||
+    item.projectedBaseline ||
+    item.preProjectionRap ||
+    item.hyperBaselineRap
+  );
+
+  if (direct > 0) return direct;
+
+  const sales = Array.isArray(item.sales)
+    ? item.sales
+    : Array.isArray(item.recentSales)
+      ? item.recentSales
+      : [];
+
+  for (const sale of sales) {
+    const salePrice = n(sale.salePrice || sale.price);
+    const oldRap = n(sale.oldRap || sale.oldRAP);
+    const newRap = n(sale.newRap || sale.newRAP);
+
+    if (!salePrice || !oldRap || !newRap) continue;
+
+    const hugeSale = salePrice >= oldRap * 2.25;
+    const bigRapJump = newRap >= oldRap * 1.12;
+
+    if (hugeSale && bigRapJump) {
+      return oldRap;
+    }
+  }
+
+  return 0;
+}
 function safeRapMetric(item) {
   if (!item) return 0;
 
   // Keep projected logic FIRST.
   // Projecteds still use pre-projection baseline RAP.
   if ((item.projected || item.isProjected) && !item.isValued) {
-    return safeProjectedRap(item);
+    const baseline = safeProjectedRap(item);
+    if (baseline > 0) return baseline;
+    return n(item.rap || item.recentAveragePrice);
   }
 
   // Low-RAP correction only applies to normal non-projected RAP items.
@@ -148,7 +185,7 @@ function safeRapMetric(item) {
     return n(item.lowAdjustedRap);
   }
 
-  return n(item.rap);
+  return n(item.rap || item.recentAveragePrice);
 }
 function isActuallyProjected(item) {
   return !!(
@@ -258,20 +295,14 @@ function rapWithOp(item) {
 }
 
 function safeProjectedRap(item) {
-  const baseline = n(
-    item?.baselineRap ||
-    item?.projectedBaseline ||
-    item?.preProjectionRap
-  );
-
-  if (baseline > 0) return baseline;
-
-  // Last-resort fallback only if sales parsing failed.
-  return 0;
+  return inferProjectedBaselineRap(item);
 }
 function effectiveMetric(item) {
   if (!item) return 0;
-  if ((item.projected || item.isProjected) && !item.isValued) return safeProjectedRap(item);
+  if ((item.projected || item.isProjected) && !item.isValued) {
+    const baseline = safeProjectedRap(item);
+    return baseline > 0 ? baseline : n(item.rap || item.recentAveragePrice);
+  }
   return tradeMetric(item);
 }
 
@@ -998,11 +1029,19 @@ function baseResult(partial, giving, receiving, extraReasons) {
 }
 function cleanItem(item) {
   const projected = !!(item.projected || item.isProjected);
-  const baselineRap = n(
+  const directBaselineRap = n(
     item.baselineRap ||
     item.projectedBaseline ||
-    item.preProjectionRap
+    item.preProjectionRap ||
+    item.hyperBaselineRap
   );
+  const inferredBaselineRap = inferProjectedBaselineRap(item);
+  const baselineRap = inferredBaselineRap > 0 ? inferredBaselineRap : directBaselineRap;
+  const sales = Array.isArray(item.sales)
+    ? item.sales
+    : Array.isArray(item.recentSales)
+      ? item.recentSales
+      : [];
 
   return {
     ...item,
@@ -1017,6 +1056,9 @@ function cleanItem(item) {
     isActualProjected: projected,
     baselineRap,
     projectedBaseline: baselineRap,
+    preProjectionRap: baselineRap,
+    sales,
+    recentSales: sales,
     isLowRapNow: !!item.isLowRapNow,
     lowAdjustedRap: n(item.lowAdjustedRap),
     lowRapReason: item.lowRapReason || "",

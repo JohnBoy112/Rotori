@@ -972,14 +972,18 @@ async function fetchMarketSummary(itemId, knownValue = 0) {
 const hyperInflated = detectHyperInflatedFromSales(sales);
 const lowRap = detectLowRapFromSales(sales, demand, trend);
 const valuedDropRisk = detectValuedDropRiskFromSales(sales, knownValue);
+const projectedBaseline = detectProjectedBaselineFromSales(sales);
+const baselineRapValue = hyperInflated.isHyperInflated
+  ? hyperInflated.hyperBaselineRap
+  : (projection.baselineRap || projectedBaseline);
 
 const data = {
   demand,
   trend,
  projected: projection.projected || hyperInflated.isHyperInflated,
-baselineRap: hyperInflated.isHyperInflated
-  ? hyperInflated.hyperBaselineRap
-  : projection.baselineRap,
+baselineRap: baselineRapValue,
+projectedBaseline: baselineRapValue,
+preProjectionRap: baselineRapValue,
   isHyperInflated: hyperInflated.isHyperInflated,
 hyperBaselineRap: hyperInflated.hyperBaselineRap,
 hyperPeakRap: hyperInflated.hyperPeakRap,
@@ -1010,7 +1014,9 @@ hyperInflationReason: hyperInflated.hyperInflationReason,
   salesCount: sales.length,
   latestSalePrice: sales[0]?.salePrice || 0,
   latestOldRap: sales[0]?.oldRap || 0,
-  latestNewRap: sales[0]?.newRap || 0
+  latestNewRap: sales[0]?.newRap || 0,
+  sales,
+  recentSales: sales
 };
 if (String(itemId) === "114706745345742") {
   console.log("FROSTY FINAL MARKET DATA:", data);
@@ -1221,8 +1227,11 @@ copy.salesCount = market.salesCount;
 copy.latestSalePrice = market.latestSalePrice;
 copy.latestOldRap = market.latestOldRap;
 copy.latestNewRap = market.latestNewRap;
-copy.baselineRap = market.baselineRap;
-copy.projectedBaseline = market.baselineRap || 0;
+copy.sales = Array.isArray(market.sales) ? market.sales : [];
+copy.recentSales = Array.isArray(market.recentSales) ? market.recentSales : copy.sales;
+copy.baselineRap = market.baselineRap || 0;
+copy.projectedBaseline = market.projectedBaseline || market.baselineRap || 0;
+copy.preProjectionRap = market.preProjectionRap || market.baselineRap || 0;
 copy.isHyperInflated = market.isHyperInflated || false;
 copy.hyperBaselineRap = market.hyperBaselineRap || 0;
 copy.hyperPeakRap = market.hyperPeakRap || 0;
@@ -1365,6 +1374,29 @@ function parseRecentSalesUltraLoose(html, limit = 120) {
 }
 
 
+
+function detectProjectedBaselineFromSales(sales) {
+  if (!Array.isArray(sales)) return 0;
+
+  const ordered = [...sales].reverse();
+
+  for (const sale of ordered) {
+    const salePrice = Number(sale.salePrice || sale.price || 0);
+    const oldRap = Number(sale.oldRap || sale.oldRAP || 0);
+    const newRap = Number(sale.newRap || sale.newRAP || 0);
+
+    if (!salePrice || !oldRap || !newRap) continue;
+
+    const hugeSale = salePrice >= oldRap * 2.25;
+    const bigRapJump = newRap >= oldRap * 1.12;
+
+    if (hugeSale && bigRapJump) {
+      return oldRap;
+    }
+  }
+
+  return 0;
+}
 
 function detectProjectionAndBaseline(sales) {
   if (!sales || sales.length === 0) {

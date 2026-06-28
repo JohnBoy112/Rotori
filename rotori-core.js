@@ -1043,21 +1043,25 @@ function previousRapTierForItem(item) {
     item?.prevRapTier ||
     item?.previousValueTier ||
     item?.previousValueRapTier ||
-    item?.valueTierPreviousRap ||
-    item?.dropCriticalRapLine
+    item?.valueTierPreviousRap
   );
 
   if (explicit > 0) return explicit;
 
   const value = n(item?.baseValue || item?.value);
-  if (!value || !Array.isArray(RAP_OP_ANCHORS)) return 0;
+  const op = n(
+    item?.overpay ||
+    item?.valueOverpay ||
+    item?.valueOP
+  );
 
-  const tiers = RAP_OP_ANCHORS
-    .map(anchor => n(anchor[0]))
-    .filter(tier => tier > 0 && tier < value)
-    .sort((a, b) => b - a);
+  // Use the value/OP data your files already have.
+  // Bighead: 4,000 - 500 = 3,500.
+  if (value > 0 && op > 0 && value > op) {
+    return value - op;
+  }
 
-  return tiers[0] || 0;
+  return 0;
 }
 
 function rotoriParseSaleTimeMs(raw) {

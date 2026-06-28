@@ -1130,7 +1130,10 @@ function rotoriPreviousTierInfo(item) {
   const previousTier = previousRapTierForItem(item);
 
   if (!value || !rap || !previousTier) return null;
-  if (rap >= previousTier) return null;
+
+  // RULE CHANGE: Item is only eligible for drop watch if RAP is 500+ below the previous tier line.
+  const gapBelowTier = previousTier - rap;
+  if (gapBelowTier < 500) return null;
 
   const directHours = n(
     item.previousTierHoursUnder ||

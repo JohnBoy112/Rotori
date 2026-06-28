@@ -2039,9 +2039,12 @@ function itemWarningText(item) {
     const value = rotoriFmt(item.baseValue || item.value);
     const rap = rotoriFmt(item.rap || item.recentAveragePrice);
     const line = rotoriFmt(item.previousRapTierLine || item.previousRapTier);
+    if (item.previousTierDataMissing) {
+      return `Previous-tier watch — value ${value}, RAP ${rap}, under the ${line} RAP line. Sales history was not attached, so hours could not be verified.`;
+    }
     const hours = rotoriFmt(item.previousTierWindowHours || item.previousTierHoursUnder);
     const percent = rotoriFmt(item.previousTierUnderPercent);
-    return `Previous-tier watch — value ${value}, RAP ${rap}, under the ${line} RAP line for about ${hours} hours${percent ? ` / ${percent}% of recent sales` : ""}.`;
+    return `Previous-tier watch — value ${value}, RAP ${rap}, under the ${line} RAP line for about ${hours} hours / ${percent}% of recent sales.`;
   }
 
   if (rotoriIsValuedOverRap(item)) {

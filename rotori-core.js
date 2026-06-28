@@ -1037,7 +1037,7 @@ function baseResult(partial, giving, receiving, extraReasons) {
 }
 
 function previousRapTierForItem(item) {
-  return n(
+  const explicit = n(
     item?.previousRapTier ||
     item?.previousRapTierLine ||
     item?.prevRapTier ||
@@ -1046,6 +1046,18 @@ function previousRapTierForItem(item) {
     item?.valueTierPreviousRap ||
     item?.dropCriticalRapLine
   );
+
+  if (explicit > 0) return explicit;
+
+  const value = n(item?.baseValue || item?.value);
+  if (!value || !Array.isArray(RAP_OP_ANCHORS)) return 0;
+
+  const tiers = RAP_OP_ANCHORS
+    .map(anchor => n(anchor[0]))
+    .filter(tier => tier > 0 && tier < value)
+    .sort((a, b) => b - a);
+
+  return tiers[0] || 0;
 }
 
 function rotoriParseSaleTimeMs(raw) {
@@ -1127,7 +1139,8 @@ function rotoriPreviousTierInfo(item) {
       previousRapTierLine: previousTier,
       previousTierHoursUnder: directHours,
       previousTierWindowHours: directHours,
-      previousTierUnderPercent: directPercent || 100
+      previousTierUnderPercent: directPercent || 100,
+      previousTierDataMissing: false
     };
   }
 
@@ -1145,14 +1158,30 @@ function rotoriPreviousTierInfo(item) {
     .filter(x => x.timeMs > 0 && x.newRap > 0)
     .sort((a, b) => a.timeMs - b.timeMs);
 
-  if (!ordered.length) return null;
+  if (!ordered.length) {
+    return {
+      previousRapTierLine: previousTier,
+      previousTierHoursUnder: 0,
+      previousTierWindowHours: 0,
+      previousTierUnderPercent: 0,
+      previousTierDataMissing: true
+    };
+  }
 
   const latestTime = ordered[ordered.length - 1].timeMs;
   const windowHours = 24;
   const cutoff = latestTime - windowHours * 60 * 60 * 1000;
   const recent = ordered.filter(x => x.timeMs >= cutoff);
 
-  if (recent.length < 5) return null;
+  if (recent.length < 5) {
+    return {
+      previousRapTierLine: previousTier,
+      previousTierHoursUnder: 0,
+      previousTierWindowHours: 0,
+      previousTierUnderPercent: 0,
+      previousTierDataMissing: true
+    };
+  }
 
   const underCount = recent.filter(x => x.newRap < previousTier).length;
   const underRatio = underCount / recent.length;
@@ -1171,19 +1200,35 @@ function rotoriPreviousTierInfo(item) {
     : 0;
 
   const qualifies = continuousHours >= 24 || underRatio >= 0.9;
-  if (!qualifies) return null;
+  if (!qualifies) {
+    return {
+      previousRapTierLine: previousTier,
+      previousTierHoursUnder: continuousHours,
+      previousTierWindowHours: windowHours,
+      previousTierUnderPercent: Math.round(underRatio * 100),
+      previousTierDataMissing: false,
+      previousTierSoftWatch: true
+    };
+  }
 
   return {
     previousRapTierLine: previousTier,
     previousTierHoursUnder: Math.max(continuousHours, windowHours),
     previousTierWindowHours: windowHours,
-    previousTierUnderPercent: Math.round(underRatio * 100)
+    previousTierUnderPercent: Math.round(underRatio * 100),
+    previousTierDataMissing: false
   };
 }
 
 function applyPreviousTierDropWatch(item) {
   const info = rotoriPreviousTierInfo(item);
   if (!info) return item;
+
+  const value = n(item.baseValue || item.value);
+  const rap = n(item.rap || item.recentAveragePrice);
+  const reason = info.previousTierDataMissing
+    ? `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(value)}, RAP ${fmtNum(rap)}, and it is under the ${fmtNum(info.previousRapTierLine)} previous RAP tier. Rotori could not verify the hours because sales history was not attached to this item.`
+    : `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(value)}, RAP ${fmtNum(rap)}, previous tier ${fmtNum(info.previousRapTierLine)}, and ${fmtNum(info.previousTierUnderPercent)}% of the last ${fmtNum(info.previousTierWindowHours)} hours stayed under that line.`;
 
   return {
     ...item,
@@ -1192,8 +1237,9 @@ function applyPreviousTierDropWatch(item) {
     previousTierHoursUnder: info.previousTierHoursUnder,
     previousTierWindowHours: info.previousTierWindowHours,
     previousTierUnderPercent: info.previousTierUnderPercent,
-    previousTierReason:
-      `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(item.baseValue || item.value)}, RAP ${fmtNum(item.rap)}, previous tier ${fmtNum(info.previousRapTierLine)}, and ${fmtNum(info.previousTierUnderPercent)}% of the last ${fmtNum(info.previousTierWindowHours)} hours stayed under that line.`
+    previousTierDataMissing: !!info.previousTierDataMissing,
+    previousTierSoftWatch: !!info.previousTierSoftWatch,
+    previousTierReason: reason
   };
 }
 

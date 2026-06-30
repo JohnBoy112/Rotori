@@ -407,21 +407,169 @@ function isHighDemand(item) {
   const d = normalizeDemand(item?.demand);
   return d === "HIGH" || d === "ULTRA HIGH";
 }
+const ROTORI_FACE_NAME_BLOCKLIST = new Set([
+  "GREEN WISTFUL WINK",
+  "SNOW QUEEN SMILE",
+  "GREEN TRANCE",
+  "FRIENDLY TRUSTING SMILE",
+  "SO SUPER EXCITED PINK",
+  "DESERT COMMANDO",
+  "PURPLE WISTFUL WINK",
+  "BLUE WISTFUL WINK",
+  "PINK SHADES MCCOOL",
+  "GRITTY BOMBO",
+  "ROSE AMAZEFACE",
+  "DARING BLONDE BEARD FACE",
+  "BACON FACE",
+  "RED WHITE AND STARFACE",
+  "GREEN AMAZEFACE",
+  "BLUE STARFACE",
+  "BLUE STARRY SIGHT",
+  "BLUE AMAZEFACE",
+  "VIOLET STARRY SIGHT",
+  "LAVENDER AMAZEFACE",
+  "CRIMSON EVIL EYE",
+  "CRAZYBOT 10000",
+  "ORANGE STARFACE",
+  "GOLDEN EVIL EYE",
+  "MANICBOT 10000",
+  "YELLOW STARFACE",
+  "SAPPHIRE EVIL EYE",
+  "RED GOOF",
+  "EMERALD EVIL EYE",
+  "GREEN STARRY SIGHT",
+  "RED ULTIMATE DRAGON FACE",
+  "GREEN STARFACE",
+  "GREEN GOOF",
+  "BLUE GOOF",
+  "TORQUE THE GREEN ORC",
+  "BLUE ULTIMATE DRAGON FACE",
+  "GREEN ULTIMATE DRAGON FACE",
+  "TORQUE THE BLUE ORC",
+  "RUBY ARCHFEY VISAGE",
+  "EVIL SKEPTIC FACE",
+  "ORANGE TRANCE",
+
+  "PURPLE ALIEN",
+  "CATCHING SNOWFLAKES",
+  "SO SUPER EXCITED PURPLE",
+  "MICK MCCANN",
+  "MONARCH BUTTERFLY SMILE",
+  "MILDLY IRRITATED FACE",
+  "CAMOFACE",
+  "FACEPALM",
+  "SNOWFLAKE EYES",
+  "PURPLE BUTTERFLY SMILE",
+  "SOPHISTICATED SPECTACLES",
+  "WINTER",
+  "TRANCE",
+  "EYES OF EVERFROST",
+  "HEART GAZE ZARA LARSSON",
+  "OCHRE OGRE",
+  "PURPLE MERMAID PRINCESS",
+  "PINK MERMAID PRINCESS",
+  "ABSOLUTELY SHOCKED",
+  "SO SUPER EXCITED BLUE",
+  "ROSEY SMILE",
+  "GOLDEN BLING BRACES",
+  "SURPRISE",
+  "CUCKOOKRAZYBOT 10000",
+  "BLUE EYEROLL",
+  "JUNGLE COMMANDO",
+  "DERP FACE",
+  "TRUE LOVE SMILE",
+  "EGG ON YOUR FACE",
+  "EGG CRAZED",
+
+  "CLOWN SCHOOL DROPOUT",
+  "CRYBABY",
+  "PURPLE BUBBLE TROUBLE",
+  "GREEN BUBBLE TROUBLE",
+  "MISS SCARLET",
+  "PINK GALAXY GAZE",
+  "EVIL SKEPTIC",
+  "RUDOLPH",
+  "PURPLE SUPER HAPPY JOY",
+  "EMERALD AMBASSADOR",
+  "FAWKES FACE",
+  "ZIP IT",
+  "BLUE ROCK STAR SMILE",
+  "SAPPHIRE DROOL",
+  "GREEN EYED AWESOME FACE",
+  "THE FIRST TIME I EVER PLAYED ROBLOX",
+  "COUNTRY MORNING",
+  "CRIMSON STARFACE",
+  "IT S SO BEAUTIFUL",
+  "SNEAKY GREEN EYED SNAKE",
+  "SNOWMAN FACE",
+  "SEEING STARS",
+  "MADBOT 10000",
+  "BUTTERFLY",
+  "EYES OF EVERFLAME",
+  "PURPLE STARFACE",
+  "SERIOUS RED EYE SCAR",
+  "RED SERIOUS SCAR FACE",
+  "BLUE TRANCE",
+  "SAPPHIRE ARCHFEY VISAGE",
+
+  "SILVER PUNK FACE",
+  "EMERALD ARCHFEY VISAGE",
+  "NOT SO FRIENDLY EVISCERATOR",
+  "GOLDEN SHINY TEETH",
+  "SAPPHIRE LASER VISION",
+  "BANDAGE",
+  "PUNK FACE",
+  "PRANKSTER",
+  "PURPLE GALAXY GAZE",
+  "TEAL ROCK STAR SMILE",
+  "GREEN DROOL ANGRY ZOMBIE",
+  "BUBBLE TROUBLE",
+  "BEAST MODE",
+  "TROUBLEMAKER",
+  "PAINTBALL ENTHUSIAST",
+  "WHERE ARE THE EGGS",
+  "BLIZZARD BEAST MODE",
+  "PLAYFUL VAMPIRE",
+  "PURPLE TRANCE",
+  "ROBLOX MADNESS FACE",
+  "VIOLET FANG",
+  "ANGELIC",
+  "EMBARRASSED",
+  "IMAGINE",
+  "RADIOACTIVE BEAST MODE",
+  "GOLDEN LIGHTNING SPEAKER",
+  "GREEN SUPER HAPPY JOY",
+  "REALLY EMBARRASSED",
+  "TEAL MERMAID QUEEN",
+  "BLUE BUBBLE TROUBLE"
+]);
+
+function rotoriNormalizeFaceName(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 function isFaceLikeItem(item) {
-  const name = String(item?.name || "").toUpperCase();
+  const name = String(item?.name || "");
+  const upper = name.toUpperCase();
+  const normalized = rotoriNormalizeFaceName(name);
 
   return (
-    name.includes("FACE") ||
-    name.includes("SMILE") ||
-    name.includes("WINK") ||
-    name.includes("GAZE") ||
-    name.includes("EYES") ||
-    name.includes("FRECKLE") ||
-    name.includes("PRANKSTER") ||
-    name.includes("TATTLETALE") ||
-    name.includes("YUM") ||
-    name.includes("FIRST TIME I EVER PLAYED") ||
-    name.includes("I EVER PLAYED ROBLOX")
+    ROTORI_FACE_NAME_BLOCKLIST.has(normalized) ||
+
+    upper.includes("FACE") ||
+    upper.includes("SMILE") ||
+    upper.includes("WINK") ||
+    upper.includes("GAZE") ||
+    upper.includes("EYES") ||
+    upper.includes("FRECKLE") ||
+    upper.includes("PRANKSTER") ||
+    upper.includes("TATTLETALE") ||
+    upper.includes("YUM") ||
+    upper.includes("FIRST TIME I EVER PLAYED") ||
+    upper.includes("I EVER PLAYED ROBLOX")
   );
 }
 

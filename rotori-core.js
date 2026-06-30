@@ -140,30 +140,100 @@ function inferProjectedBaselineRap(item) {
     item.hyperBaselineRap
   );
 
-  if (direct > 0) return direct;
-
-  const sales = Array.isArray(item.sales)
+  const rawSales = Array.isArray(item.sales)
     ? item.sales
     : Array.isArray(item.recentSales)
       ? item.recentSales
       : [];
 
-  for (const sale of sales) {
-    const salePrice = n(sale.salePrice || sale.price);
-    const oldRap = n(sale.oldRap || sale.oldRAP);
-    const newRap = n(sale.newRap || sale.newRAP);
+  const sales = rawSales
+    .map(s => ({
+      salePrice: n(s.salePrice || s.price),
+      oldRap: n(s.oldRap || s.oldRAP),
+      newRap: n(s.newRap || s.newRAP),
+      timestamp: n(s.timestamp || s.time || s.date)
+    }))
+    .filter(s => s.salePrice > 0 && s.oldRap > 0 && s.newRap > 0);
 
-    if (!salePrice || !oldRap || !newRap) continue;
+  function localMedian(nums) {
+    const arr = nums
+      .filter(v => Number.isFinite(Number(v)) && Number(v) > 0)
+      .map(Number)
+      .sort((a, b) => a - b);
 
-    const hugeSale = salePrice >= oldRap * 2.25;
-    const bigRapJump = newRap >= oldRap * 1.12;
+    if (!arr.length) return 0;
 
-    if (hugeSale && bigRapJump) {
-      return oldRap;
+    const mid = Math.floor(arr.length / 2);
+
+    return arr.length % 2
+      ? arr[mid]
+      : Math.round((arr[mid - 1] + arr[mid]) / 2);
+  }
+
+  if (sales.length >= 3) {
+    // Rolimons sales are usually newest first, so flip to oldest -> newest.
+    const chronological = [...sales].reverse();
+
+    let pumpIndex = -1;
+
+    for (let i = 0; i < chronological.length; i++) {
+      const sale = chronological[i];
+
+      const priceRatio = sale.salePrice / sale.oldRap;
+      const rapRatio = sale.newRap / sale.oldRap;
+      const jump = sale.newRap - sale.oldRap;
+
+      const strongPump =
+        priceRatio >= 2.25 &&
+        rapRatio >= 1.12 &&
+        jump >= Math.max(500, sale.oldRap * 0.08);
+
+      const extremePump =
+        priceRatio >= 3.25 &&
+        jump >= Math.max(500, sale.oldRap * 0.06);
+
+      if (strongPump || extremePump) {
+        pumpIndex = i;
+        break;
+      }
+    }
+
+    if (pumpIndex >= 0) {
+      const pumpOldRap = chronological[pumpIndex].oldRap;
+
+      // Use the stable window right before the pump, not ancient low history.
+      const prePumpWindow = chronological.slice(
+        Math.max(0, pumpIndex - 8),
+        pumpIndex + 1
+      );
+
+      const nearbyRaps = [];
+
+      for (const sale of prePumpWindow) {
+        nearbyRaps.push(sale.oldRap, sale.newRap);
+      }
+
+      const closeToPump = nearbyRaps.filter(v =>
+        v >= pumpOldRap * 0.75 &&
+        v <= pumpOldRap * 1.15
+      );
+
+      const salesBaseline = localMedian(closeToPump.length ? closeToPump : nearbyRaps);
+
+      // If sales prove a newer/higher baseline, override stale backend baseline.
+      if (salesBaseline > 0) {
+        if (!direct) return salesBaseline;
+
+        if (salesBaseline >= direct * 1.25) {
+          return salesBaseline;
+        }
+
+        return Math.max(salesBaseline, direct);
+      }
     }
   }
 
-  return 0;
+  return direct > 0 ? direct : 0;
 }
 function safeRapMetric(item) {
   if (!item) return 0;

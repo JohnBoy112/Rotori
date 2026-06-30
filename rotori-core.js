@@ -146,91 +146,103 @@ function inferProjectedBaselineRap(item) {
       ? item.recentSales
       : [];
 
+  function parseSaleTimeMs(raw) {
+    if (typeof raw === "number") {
+      return raw < 10_000_000_000 ? raw * 1000 : raw;
+    }
+
+    const text = String(raw || "").trim();
+    if (!text) return 0;
+
+    const directParse = Date.parse(text);
+    if (Number.isFinite(directParse)) return directParse;
+
+    const match = text.match(
+      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+    );
+
+    if (!match) return 0;
+
+    let [, year, month, day, hour, minute, second, ampm] = match;
+
+    year = Number(year);
+    month = Number(month);
+    day = Number(day);
+    hour = Number(hour);
+    minute = Number(minute);
+    second = Number(second || 0);
+
+    if (ampm) {
+      const p = ampm.toUpperCase();
+      if (p === "PM" && hour < 12) hour += 12;
+      if (p === "AM" && hour === 12) hour = 0;
+    }
+
+    return new Date(year, month - 1, day, hour, minute, second).getTime();
+  }
+
   const sales = rawSales
-    .map(s => ({
+    .map((s, index) => ({
       salePrice: n(s.salePrice || s.price),
-      oldRap: n(s.oldRap || s.oldRAP),
-      newRap: n(s.newRap || s.newRAP),
-      timestamp: n(s.timestamp || s.time || s.date)
+      oldRap: n(s.oldRap || s.oldRAP || s.old_rap || s.oldRecentAveragePrice),
+      newRap: n(s.newRap || s.newRAP || s.new_rap || s.newRecentAveragePrice),
+      timeMs: parseSaleTimeMs(s.time || s.date || s.soldAt || s.createdAt || s.timestamp),
+      index
     }))
     .filter(s => s.salePrice > 0 && s.oldRap > 0 && s.newRap > 0);
 
-  function localMedian(nums) {
-    const arr = nums
-      .filter(v => Number.isFinite(Number(v)) && Number(v) > 0)
-      .map(Number)
-      .sort((a, b) => a - b);
-
-    if (!arr.length) return 0;
-
-    const mid = Math.floor(arr.length / 2);
-
-    return arr.length % 2
-      ? arr[mid]
-      : Math.round((arr[mid - 1] + arr[mid]) / 2);
+  if (sales.length < 3) {
+    return direct > 0 ? direct : 0;
   }
 
-  if (sales.length >= 3) {
-    // Rolimons sales are usually newest first, so flip to oldest -> newest.
-    const chronological = [...sales].reverse();
+  // If timestamps exist, sort newest -> oldest.
+  // If not, keep Rolimons order, which is usually already newest -> oldest.
+  const usableTimes = sales.filter(s => s.timeMs > 0).length;
 
-    let pumpIndex = -1;
+  const newestToOldest = usableTimes >= 2
+    ? [...sales].sort((a, b) => b.timeMs - a.timeMs)
+    : [...sales].sort((a, b) => a.index - b.index);
 
-    for (let i = 0; i < chronological.length; i++) {
-      const sale = chronological[i];
+  function isProjectionPump(sale) {
+    const priceRatio = sale.salePrice / sale.oldRap;
+    const rapJump = sale.newRap - sale.oldRap;
+    const rapJumpPct = rapJump / sale.oldRap;
 
-      const priceRatio = sale.salePrice / sale.oldRap;
-      const rapRatio = sale.newRap / sale.oldRap;
-      const jump = sale.newRap - sale.oldRap;
+    return (
+      priceRatio >= 2.25 &&
+      rapJump >= Math.max(500, sale.oldRap * 0.08) &&
+      rapJumpPct >= 0.08
+    );
+  }
 
-      const strongPump =
-        priceRatio >= 2.25 &&
-        rapRatio >= 1.12 &&
-        jump >= Math.max(500, sale.oldRap * 0.08);
+  // Find the newest pump, then walk older through the same pump chain.
+  const newestPumpIndex = newestToOldest.findIndex(isProjectionPump);
 
-      const extremePump =
-        priceRatio >= 3.25 &&
-        jump >= Math.max(500, sale.oldRap * 0.06);
+  if (newestPumpIndex < 0) {
+    return direct > 0 ? direct : 0;
+  }
 
-      if (strongPump || extremePump) {
-        pumpIndex = i;
-        break;
-      }
+  let oldestPumpIndexInCurrentChain = newestPumpIndex;
+
+  for (let i = newestPumpIndex + 1; i < newestToOldest.length; i++) {
+    if (isProjectionPump(newestToOldest[i])) {
+      oldestPumpIndexInCurrentChain = i;
+      continue;
     }
 
-    if (pumpIndex >= 0) {
-      const pumpOldRap = chronological[pumpIndex].oldRap;
+    // First normal sale before the pump chain = stop.
+    break;
+  }
 
-      // Use the stable window right before the pump, not ancient low history.
-      const prePumpWindow = chronological.slice(
-        Math.max(0, pumpIndex - 8),
-        pumpIndex + 1
-      );
+  const baseline = newestToOldest[oldestPumpIndexInCurrentChain].oldRap;
 
-      const nearbyRaps = [];
+  if (baseline > 0) {
+    // This is the important part:
+    // current pump chain baseline beats ancient direct baselines like 5,032.
+    if (!direct) return baseline;
+    if (baseline >= direct * 1.2) return baseline;
 
-      for (const sale of prePumpWindow) {
-        nearbyRaps.push(sale.oldRap, sale.newRap);
-      }
-
-      const closeToPump = nearbyRaps.filter(v =>
-        v >= pumpOldRap * 0.75 &&
-        v <= pumpOldRap * 1.15
-      );
-
-      const salesBaseline = localMedian(closeToPump.length ? closeToPump : nearbyRaps);
-
-      // If sales prove a newer/higher baseline, override stale backend baseline.
-      if (salesBaseline > 0) {
-        if (!direct) return salesBaseline;
-
-        if (salesBaseline >= direct * 1.25) {
-          return salesBaseline;
-        }
-
-        return Math.max(salesBaseline, direct);
-      }
-    }
+    return Math.max(direct, baseline);
   }
 
   return direct > 0 ? direct : 0;

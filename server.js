@@ -26,6 +26,91 @@ const { analyzeTradeCore } = require("./rotori-core");
 const express = require("express");
 const cors = require("cors");
 
+const ROTORI_VALUES_URL = process.env.ROTORI_VALUES_URL;
+let rotoriValueData = {
+  schema: 1,
+  version: 0,
+  updatedAt: "",
+  items: {}
+};
+
+function safeNumber(x) {
+  const n = Number(x || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function cleanKey(x) {
+  return String(x || "").trim();
+}
+
+function validateRotoriValueData(data) {
+  if (!data || typeof data !== "object") {
+    throw new Error("Rotori value data must be an object");
+  }
+
+  if (!data.items || typeof data.items !== "object") {
+    throw new Error("Rotori value data missing items object");
+  }
+
+  const cleaned = {
+    schema: safeNumber(data.schema) || 1,
+    version: safeNumber(data.version),
+    updatedAt: String(data.updatedAt || ""),
+    items: {}
+  };
+
+  for (const [rawId, rawItem] of Object.entries(data.items)) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+
+    const id = cleanKey(rawId);
+    const value = safeNumber(rawItem.value);
+    const valueOP = safeNumber(rawItem.valueOP || rawItem.overpay);
+    const previousRapLine = safeNumber(rawItem.previousRapLine);
+
+    if (!id || value <= 0) continue;
+
+    cleaned.items[id] = {
+      name: String(rawItem.name || ""),
+      value,
+      valueOP,
+      previousRapLine
+    };
+  }
+
+  return cleaned;
+}
+
+async function refreshRotoriValueData() {
+  if (!ROTORI_VALUES_URL) {
+    console.warn("ROTORI_VALUES_URL is not set. Using existing/local value data.");
+    return;
+  }
+
+  try {
+    const url = `${ROTORI_VALUES_URL}?t=${Date.now()}`;
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Remote value file failed: ${response.status}`);
+    }
+
+    const json = await response.json();
+    const cleaned = validateRotoriValueData(json);
+
+    rotoriValueData = cleaned;
+    console.log(`Loaded Rotori value data v${cleaned.version} with ${Object.keys(cleaned.items).length} items`);
+  } catch (err) {
+    console.error("Failed to refresh Rotori value data:", err.message);
+  }
+}
+
+refreshRotoriValueData();
+setInterval(refreshRotoriValueData, 5 * 60 * 1000);
+
 const app = express();
 
 app.use(cors());
@@ -1147,7 +1232,7 @@ async function loadRolimonsData() {
     const projected = item[7] === 1;
     const isValued = realValue > 0;
 
-    const itemObject = {
+    const itemObject = applyRotoriRemoteValueData({
       id: String(itemId),
       assetId: String(itemId),
       name,
@@ -1162,7 +1247,7 @@ async function loadRolimonsData() {
       overpay: overpayList[normalize(name)] || 0,
       rapOverpay: rapOpList[normalize(name)] || 0,
       thumbnailUrl: ""
-    };
+    });
 
     nameToItem[normalize(name)] = itemObject;
 
@@ -1172,6 +1257,36 @@ async function loadRolimonsData() {
   }
 
   console.log(`Loaded ${Object.keys(itemData).length} Rolimons items.`);
+}
+
+function applyRotoriRemoteValueData(item) {
+  if (!item) return item;
+
+  const id = String(
+    item.id ||
+    item.assetId ||
+    item.itemId ||
+    ""
+  );
+
+  const remote = rotoriValueData.items[id];
+
+  if (!remote) return item;
+
+  return {
+    ...item,
+    isValued: remote.value > 0,
+    value: remote.value,
+    baseValue: remote.value,
+    overpay: remote.valueOP,
+    valueOverpay: remote.valueOP,
+    valueOP: remote.valueOP,
+    previousRapTierLine: remote.previousRapLine,
+    previousRapTier: remote.previousRapLine,
+    valueTierPreviousRap: remote.previousRapLine,
+    rotoriRemoteDataVersion: rotoriValueData.version,
+    rotoriRemoteUpdatedAt: rotoriValueData.updatedAt
+  };
 }
 
 function findItem(name) {
@@ -1189,7 +1304,7 @@ async function decorateTradeItems(items) {
   for (const item of items || []) {
     if (!item) continue;
 
-    const copy = { ...item };
+    const copy = { ...applyRotoriRemoteValueData(item) };
 
     copy.id = String(copy.id || copy.assetId || "");
     copy.assetId = copy.id;
@@ -1595,6 +1710,15 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/rotori-data-status", (req, res) => {
+  res.json({
+    ok: true,
+    version: rotoriValueData.version,
+    updatedAt: rotoriValueData.updatedAt,
+    itemCount: Object.keys(rotoriValueData.items || {}).length
+  });
 });
 
 app.listen(PORT, async () => {

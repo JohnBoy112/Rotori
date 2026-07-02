@@ -815,7 +815,8 @@ function itemPerformanceLine(item, side) {
   if (actualProjected) warnings.push("PROJECTED");
   else if (item.isHyperInflated) warnings.push("HYPER-INFLATED");
   if (item.isDropping) warnings.push("DROPPING");
-  if (item.previousTierDropWatch) warnings.push("previous tier watch");
+  if (item.previousTierDropWatch) warnings.push("drop watch");
+  else if (item.rapLineUnderWatch) warnings.push("under RAP line");
   if (isLowDemand(item)) warnings.push("low demand");
   if (isWeakTrend(item)) warnings.push("weak trend");
   if (item.isValued && health.includes("critical")) warnings.push("critical under RAP");
@@ -837,7 +838,12 @@ function addItemPerformanceNotes(giving, receiving, reasons) {
     if (item.previousTierDropWatch) {
       reasons.push(
         item.previousTierReason ||
-        `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(item.baseValue || item.value)}, RAP ${fmtNum(item.rap)}, and it is struggling under the ${fmtNum(item.previousRapTierLine)} RAP tier.`
+        `${itemLabel(item)} is on drop watch because its RAP is at least 500 under its RAP line.`
+      );
+    } else if (item.rapLineUnderWatch) {
+      reasons.push(
+        item.previousTierReason ||
+        `${itemLabel(item)} is under its RAP line, but it is not drop-eligible yet.`
       );
     }
 
@@ -1468,20 +1474,44 @@ function applyPreviousTierDropWatch(item) {
 
   const value = n(item.baseValue || item.value);
   const rap = n(item.rap || item.recentAveragePrice);
-  const reason = info.previousTierDataMissing
-    ? `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(value)}, RAP ${fmtNum(rap)}, and it is under the ${fmtNum(info.previousRapTierLine)} previous RAP tier. Rotori could not verify the hours because sales history was not attached to this item.`
-    : `${itemLabel(item)} is on previous-tier watch: value ${fmtNum(value)}, RAP ${fmtNum(rap)}, previous tier ${fmtNum(info.previousRapTierLine)}, and ${fmtNum(info.previousTierUnderPercent)}% of the last ${fmtNum(info.previousTierWindowHours)} hours stayed under that line.`;
+  const line = n(info.previousRapTierLine);
+  const gapBelowLine = line - rap;
+  if (!line || gapBelowLine <= 0) return item;
+
+  const hourText = n(info.previousTierHoursUnder) > 0
+    ? ` for about ${fmtNum(info.previousTierHoursUnder)} hours`
+    : "";
+
+  if (gapBelowLine >= 500) {
+    return {
+      ...item,
+      previousTierDropWatch: true,
+      rapLineUnderWatch: false,
+      dropEligible: true,
+      isDropping: true,
+      previousRapTierLine: line,
+      previousTierGapBelowLine: gapBelowLine,
+      previousTierHoursUnder: n(info.previousTierHoursUnder),
+      previousTierWindowHours: n(info.previousTierWindowHours),
+      previousTierUnderPercent: n(info.previousTierUnderPercent),
+      previousTierDataMissing: !!info.previousTierDataMissing,
+      previousTierReason:
+        `${itemLabel(item)} is on drop watch: value ${fmtNum(value)}, RAP ${fmtNum(rap)}, ${fmtNum(gapBelowLine)} under the ${fmtNum(line)} RAP line${hourText}.`
+    };
+  }
 
   return {
     ...item,
-    previousTierDropWatch: true,
-    previousRapTierLine: info.previousRapTierLine,
-    previousTierHoursUnder: info.previousTierHoursUnder,
-    previousTierWindowHours: info.previousTierWindowHours,
-    previousTierUnderPercent: info.previousTierUnderPercent,
+    previousTierDropWatch: false,
+    rapLineUnderWatch: true,
+    previousRapTierLine: line,
+    previousTierGapBelowLine: gapBelowLine,
+    previousTierHoursUnder: n(info.previousTierHoursUnder),
+    previousTierWindowHours: n(info.previousTierWindowHours),
+    previousTierUnderPercent: n(info.previousTierUnderPercent),
     previousTierDataMissing: !!info.previousTierDataMissing,
-    previousTierSoftWatch: !!info.previousTierSoftWatch,
-    previousTierReason: reason
+    previousTierReason:
+      `${itemLabel(item)} is under its RAP line: value ${fmtNum(value)}, RAP ${fmtNum(rap)}, ${fmtNum(gapBelowLine)} under the ${fmtNum(line)} RAP line${hourText}. It is not drop-eligible.`
   };
 }
 

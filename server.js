@@ -45,11 +45,11 @@ function cleanKey(x) {
 
 function validateRotoriValueData(data) {
   if (!data || typeof data !== "object") {
-    throw new Error("Rotori value data must be an object");
+    throw new Error("Rotori OP data must be an object");
   }
 
   if (!data.items || typeof data.items !== "object") {
-    throw new Error("Rotori value data missing items object");
+    throw new Error("Rotori OP data missing items object");
   }
 
   const cleaned = {
@@ -63,17 +63,21 @@ function validateRotoriValueData(data) {
     if (!rawItem || typeof rawItem !== "object") continue;
 
     const id = cleanKey(rawId);
-    const value = safeNumber(rawItem.value);
-    const valueOP = safeNumber(rawItem.valueOP || rawItem.overpay);
-    const previousRapLine = safeNumber(rawItem.previousRapLine);
 
-    if (!id || value <= 0) continue;
+    const valueOP = safeNumber(
+      rawItem.valueOP ??
+      rawItem.valueOverpay ??
+      rawItem.overpay
+    );
+
+    if (!id) continue;
+
+    // Skip entries that do not actually define an OP override.
+    if (!Number.isFinite(valueOP) || valueOP < 0) continue;
 
     cleaned.items[id] = {
       name: String(rawItem.name || ""),
-      value,
-      valueOP,
-      previousRapLine
+      valueOP
     };
   }
 
@@ -1273,19 +1277,26 @@ function applyRotoriRemoteValueData(item) {
 
   if (!remote) return item;
 
+  const valueOP = safeNumber(
+    remote.valueOP ??
+    remote.valueOverpay ??
+    remote.overpay
+  );
+
+  if (!Number.isFinite(valueOP) || valueOP < 0) return item;
+
   return {
     ...item,
-    isValued: remote.value > 0,
-    value: remote.value,
-    baseValue: remote.value,
-    overpay: remote.valueOP,
-    valueOverpay: remote.valueOP,
-    valueOP: remote.valueOP,
-    previousRapTierLine: remote.previousRapLine,
-    previousRapTier: remote.previousRapLine,
-    valueTierPreviousRap: remote.previousRapLine,
-    rotoriRemoteDataVersion: rotoriValueData.version,
-    rotoriRemoteUpdatedAt: rotoriValueData.updatedAt
+
+    // ONLY override OP.
+    // Do not touch value, baseValue, RAP line, demand, trend, etc.
+    overpay: valueOP,
+    valueOverpay: valueOP,
+    valueOP: valueOP,
+
+    // Optional debug fields.
+    rotoriRemoteOPVersion: rotoriValueData.version,
+    rotoriRemoteOPUpdatedAt: rotoriValueData.updatedAt
   };
 }
 

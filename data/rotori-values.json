@@ -1,1 +1,20 @@
 
+{
+  "schema": 1,
+  "version": 1,
+  "updatedAt": "2026-07-02T00:00:00Z",
+  "items": {
+    "1048037": {
+      "name": "Bighead",
+      "value": 4000,
+      "valueOP": 500,
+      "previousRapLine": 3500
+    },
+    "1029025": {
+      "name": "Perfectly Legitimate Business Hat",
+      "value": 6000,
+      "valueOP": 100,
+      "previousRapLine": 5000
+    }
+  }
+}

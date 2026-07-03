@@ -1210,6 +1210,50 @@ function detectLowRapFromSales(sales, demand = "UNKNOWN", trend = "UNKNOWN") {
     lowRapReason: ""
   };
 }
+function rotoriShouldReplaceNameItem(key, existing, candidate) {
+  // Only special-case Business Cat.
+  if (key !== "BUSINESSCAT") return true;
+
+  if (!existing) return true;
+
+  const candidateRap = Number(candidate?.rap || 0);
+  const existingRap = Number(existing?.rap || 0);
+
+  const candidateIsCheapBusinessCat =
+    candidateRap > 0 && candidateRap < 10000;
+
+  const existingIsCheapBusinessCat =
+    existingRap > 0 && existingRap < 10000;
+
+  // If new one is cheap and old one is expensive, replace it.
+  if (candidateIsCheapBusinessCat && !existingIsCheapBusinessCat) {
+    return true;
+  }
+
+  // If old one is already the cheap Business Cat, do not let expensive one overwrite.
+  if (!candidateIsCheapBusinessCat && existingIsCheapBusinessCat) {
+    return false;
+  }
+
+  // If both are cheap, pick the one closest to the trade-page Business Cat range.
+  if (candidateIsCheapBusinessCat && existingIsCheapBusinessCat) {
+    return (
+      Math.abs(candidateRap - 1300) <
+      Math.abs(existingRap - 1300)
+    );
+  }
+
+  // If both are expensive/weird, keep the first one.
+  return false;
+}
+
+function rotoriSetNameItem(key, itemObject) {
+  const existing = nameToItem[key];
+
+  if (rotoriShouldReplaceNameItem(key, existing, itemObject)) {
+    nameToItem[key] = itemObject;
+  }
+}
 
 async function loadRolimonsData() {
   console.log("Loading Rolimons data...");
@@ -1253,11 +1297,19 @@ async function loadRolimonsData() {
       thumbnailUrl: ""
     });
 
-    nameToItem[normalize(name)] = itemObject;
+    const nameKey = normalize(name);
+rotoriSetNameItem(nameKey, itemObject);
 
-    if (acronym) {
-      nameToItem[normalize(acronym)] = itemObject;
-    }
+if (acronym) {
+  const acronymKey = normalize(acronym);
+
+  // Keep acronym behavior normal, except do not let an acronym overwrite Business Cat.
+  if (acronymKey === "BUSINESSCAT") {
+    rotoriSetNameItem(acronymKey, itemObject);
+  } else {
+    nameToItem[acronymKey] = itemObject;
+  }
+}
   }
 
   console.log(`Loaded ${Object.keys(itemData).length} Rolimons items.`);

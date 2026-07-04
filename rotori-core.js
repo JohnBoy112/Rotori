@@ -1906,26 +1906,40 @@ const usage = adjustedAllowedOp > 0 ? opPaid / adjustedAllowedOp : (opPaid > 0 ?
 const headroom = adjustedAllowedOp - opPaid;
 
     const r = [];
-    r.push(`First, this is an upgrade into ${itemLabel(target)}, around ${fmtNum(targetBase)}.`);
-   r.push(`You're paying about ${fmtNum(opPaid)} OP on the full trade. The normal max before room discounts is around ${fmtNum(normalMaxAllowedOp)} OP.`);
-// If the shape has a specific patch reason (like 4v1), show that.
+
+r.push(
+  `First, this is an upgrade into ${itemLabel(target)}, around ${fmtNum(targetBase)}.`
+);
+
+r.push(
+  `You are paying about ${fmtNum(opPaid)} OP on the full trade. Rotori's starting OP limit for this target is ${fmtNum(normalMaxAllowedOp)} OP.`
+);
+
 if (shapePatch.reason) {
-  r.push(`Upgrade shape check: ${shapePatch.reason}`);
-} 
-// If there was a discount applied, show the discount reason.
-else if (roomDiscount > 0) {
-  if (weakTargetReasons.length) {
-    r.push(`Because ${itemLabel(target)} is ${weakTargetReasons.join(" / ")} and/or the upgrade shape needs room, Rotori lowers the upgrade cap by ${fmtNum(roomDiscount)} OP. New max is ${fmtNum(adjustedAllowedOp)} OP.`);
-  } else {
-    r.push(`Because of the ${giveCount}v${receiveCount} upgrade shape, Rotori lowers the upgrade cap by ${fmtNum(roomDiscount)} OP. New max is ${fmtNum(adjustedAllowedOp)} OP.`);
-  }
-} 
-// Only show the generic "no discount" message if we haven't already pushed a specific shape reason.
-else if (giveCount > receiveCount) {
-  r.push(`This ${giveCount}v${receiveCount} upgrade shape does not need a shape discount.`);
+  r.push(
+    `Item-count adjustment: ${shapePatch.reason}`
+  );
 }
 
-    r.push(`After the room check, I want you at ${fmtNum(adjustedAllowedOp)} OP or less. Headroom is ${signedNum(headroom)}.`);
+if (roomDiscount > 0) {
+  if (weakTargetReasons.length) {
+    r.push(
+      `${itemLabel(target)} has ${weakTargetReasons.join(" / ")}, so Rotori lowers the OP limit by ${fmtNum(roomDiscount)} OP. Final OP limit: ${fmtNum(adjustedAllowedOp)} OP.`
+    );
+  } else {
+    r.push(
+      `Because this is a ${giveCount}v${receiveCount} upgrade, Rotori lowers the OP limit by ${fmtNum(roomDiscount)} OP. Final OP limit: ${fmtNum(adjustedAllowedOp)} OP.`
+    );
+  }
+} else if (giveCount > receiveCount) {
+  r.push(
+    `This ${giveCount}v${receiveCount} upgrade does not neopPaed an extra item-count penalty. Final OP limit: ${fmtNum(adjustedAllowedOp)} OP.`
+  );
+}
+
+r.push(
+  `You should be paying ${fmtNum(adjustedAllowedOp)} OP or less here. OP room left: ${signedNum(headroom)}.`
+);
    if (ignoredValuedOP > 0) {
   r.push(
     `Ignored ${fmtNum(ignoredValuedOP)} OP from outgoing item(s) because they are under 80% of ${itemLabel(target)}. Rotori only counts outgoing OP when the item is big enough compared to the main upgrade target.`
@@ -1935,14 +1949,14 @@ else if (giveCount > receiveCount) {
     const targetHasRealStrength = !targetIsWeakForUpgrade && (isHighDemand(target) || isGoodTrend(target));
 
     if (targetHasRealStrength) {
-      r.push(`${itemLabel(target)} has strong demand/trend, so it gets a little breathing room.`);
+      r.push(`${itemLabel(target)} has strong demand/trend, so Rotori is more comfortable with this upgrade.`);
     }
 
     // FIX: Only complain about the target being "weaker" if we are actually giving good items away.
     // If outgoingMostlyMediumPlus is false, it means we're giving small items or low-demand junk,
     // so any upgrade is a positive move regardless of the target's quality.
     if (targetIsWeakForUpgrade && outgoingMostlyMediumPlus) {
-      r.push(`${itemLabel(target)} looks weaker from demand/trend/projected checks, so the max OP is stricter.`);
+      r.push(`${itemLabel(target)} looks weaker from demand/trend/projected checks, so Rotori wants you paying less OP.`);
     }
 
     let verdict;
@@ -1953,19 +1967,19 @@ else if (giveCount > receiveCount) {
       verdict = "❌ Decline upgrade";
       counterMode = "THEM_SMALL_ADD_OR_REPLACE";
       counterTarget = Math.max(1, opPaid - adjustedAllowedOp);
-      r.push(`You're over the hard max by about ${fmtNum(opPaid - maxAllowedOp)} OP.`);
+      r.push(`You are paying about ${fmtNum(opPaid - maxAllowedOp)} OP more than Rotori's final limit.`);
     } else if (opPaid > adjustedAllowedOp || usage >= 0.85) {
       verdict = "⚠️ Too thin — skip";
       counterMode = "THEM_SMALL_ADD_OR_REPLACE";
       counterTarget = Math.max(1, opPaid - adjustedAllowedOp);
-      r.push(`This is too close to max for a clean flip. You're using about ${Math.round(usage * 100)}% of the OP room.`);
+      r.push(`This is too close to Rotori's limit for a clean flip. You are using about ${Math.round(usage * 100)}% of the safe OP range.`);
     } else if (usage <= 0.5 || opGained > 0) {
       // FIX: Only label it a "weak target" in the verdict if you were giving good items for it.
       const showWeakSuffix = targetIsWeakForUpgrade && outgoingMostlyMediumPlus;
       verdict = showWeakSuffix ? "✅ Good value upgrade, but weak target" : "✅ Great upgrade";
 
       if (opGained > 0) {
-        r.push(`You are not paying OP here — you are gaining about ${fmtNum(opGained)} while upgrading.`);
+        r.push(`You are upgrading and still gaining about ${fmtNum(Math.abs(opPaid))}, so this is not an OP loss.`);
       } else {
         r.push(`This keeps room to flip. You're using about ${Math.round(Math.max(0, usage) * 100)}% of the allowed OP.`);
       }

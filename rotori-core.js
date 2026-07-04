@@ -833,6 +833,16 @@ function addItemPerformanceNotes(giving, receiving, reasons) {
     ...giving.map(item => [item, "giving"]),
     ...receiving.map(item => [item, "receiving"])
   ];
+  if ((item.projected || item.isProjected) && !item.isValued) {
+  const shownRap = n(item.rap || item.recentAveragePrice);
+  const pricedAt = safeProjectedRap(item);
+
+  if (shownRap > 0 && pricedAt > 0 && shownRap > pricedAt + 100) {
+    reasons.push(
+      `${itemLabel(item)} is projected, so Rotori does not use its full shown RAP. The page shows ${fmtNum(shownRap)} RAP, but Rotori prices it around ${fmtNum(pricedAt)} for the trade.`
+    );
+  }
+}
 
   for (const [item, side] of all) {
     if (item.previousTierDropWatch) {

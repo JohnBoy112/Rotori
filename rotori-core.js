@@ -736,10 +736,10 @@ function getDowngradeRequiredAdjustment(anchor, receiving, baseRequired) {
     and you are downgrading into mostly better-demand RAP items.
   */
   if (anchorIsLowDemand) {
-    multiplier *= 0.75;
+    multiplier *= 0.50;
 
     notes.push(
-      `${itemLabel(anchor)} is a LOW DEMAND RAP item, and you are getting better-demand RAP items back. Rotori lowers the required OP by 25% because the downgrade gives you easier pieces to move.`
+      `${itemLabel(anchor)} is a LOW DEMAND RAP item, and you are getting better-demand RAP items back. Rotori lowers the required OP by 50% because the downgrade gives you easier pieces to move.`
     );
   }
 

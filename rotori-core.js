@@ -2027,17 +2027,33 @@ r.push(
   r.push(`Item performance swing is ${qualityDiff >= 0 ? "+" : ""}${qualityDiff.toFixed(1)}.`);
 
   let verdict;
-  let counterMode = "NO_SIMPLE_COUNTER";
-  let counterTarget = 0;
+let counterMode = "NO_SIMPLE_COUNTER";
+let counterTarget = 0;
+let displayTradeType = tradeType;
 
-  if (diff > 0 && qualityDiff >= -1) {
-    verdict = `✅ Good even trade: +${fmtNum(diff)}`;
-  } else if (diff < 0 && qualityDiff <= 0) {
-    verdict = `❌ Bad even trade: ${fmtNum(diff)}`;
-    counterMode = "THEM_REPLACE_OR_ADD";
-    counterTarget = Math.abs(diff);
-    r.push("You lose value/RAP and you are not getting better item performance back.");
-  } else if (diff < 0) {
+const bigAdjustedWin =
+  diff >= Math.max(500, Math.round(givingTotal * 0.08));
+
+if (diff > 0 && bigAdjustedWin && qualityDiff >= -1) {
+  verdict = `✅ Good value win: +${fmtNum(diff)}`;
+  displayTradeType = "VALUE WIN";
+
+  r.push(
+    `Even item count, but this is not really even after Rotori's pricing. After projected/baseline math, you are winning about ${fmtNum(diff)} value.`
+  );
+} else if (diff > 0 && qualityDiff >= -1) {
+  verdict = `✅ Small value win: +${fmtNum(diff)}`;
+  displayTradeType = "SMALL VALUE WIN";
+
+  r.push(
+    `Even item count, but Rotori still has you slightly winning after adjusted pricing.`
+  );
+} else if (diff < 0 && qualityDiff <= 0) {
+  verdict = `❌ Bad even trade: ${fmtNum(diff)}`;
+  counterMode = "THEM_REPLACE_OR_ADD";
+  counterTarget = Math.abs(diff);
+  r.push("You lose value/RAP and you are not getting better item performance back.");
+} else if (diff < 0) {
   const loss = Math.abs(diff);
   const lossPct = givingTotal > 0 ? loss / givingTotal : 1;
   const smallLoss = loss <= Math.max(75, Math.round(givingTotal * 0.04));
@@ -2057,18 +2073,18 @@ r.push(
     );
   }
 } else {
-    verdict = "⚖️ Fair even trade";
-    r.push("If you don't really want their items, don't force it just because the numbers are close.");
-  }
+  verdict = "⚖️ Fair even trade";
+  r.push("If you don't really want their items, don't force it just because the numbers are close.");
+}
 
-  return baseResult({
-    verdict,
-    tradeType,
-    counterMode,
-    counterTarget,
-    counterReason: counterMode === "NO_SIMPLE_COUNTER" ? "" : "EVEN_TRADE_NEEDS_MORE",
-    reasons: r
-  }, giving, receiving, reasons);
+return baseResult({
+  verdict,
+  tradeType: displayTradeType,
+  counterMode,
+  counterTarget,
+  counterReason: counterMode === "NO_SIMPLE_COUNTER" ? "" : "EVEN_TRADE_NEEDS_MORE",
+  reasons: r
+}, giving, receiving, reasons);
 }
 
 module.exports = {

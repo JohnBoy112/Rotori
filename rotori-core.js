@@ -1933,7 +1933,7 @@ if (roomDiscount > 0) {
   }
 } else if (giveCount > receiveCount) {
   r.push(
-    `This ${giveCount}v${receiveCount} upgrade does not neopPaed an extra item-count penalty. Final OP limit: ${fmtNum(adjustedAllowedOp)} OP.`
+    ` Final OP limit: ${fmtNum(adjustedAllowedOp)} OP.`
   );
 }
 

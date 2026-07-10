@@ -1883,31 +1883,26 @@ if (projectedGive.length && netAfterDeproj >= Math.max(500, Math.round(effective
 
    
 
-// Upgrade discount for weak target items.
-// If our outgoing side is mostly MEDIUM+ demand, and the target is weak,
-// Rotori lowers how much OP we are willing to pay.
-const outgoingMostlyMediumPlus = majorityAtLeastMediumDemand(giving);
-
 const weakTargetReasons = [];
-if (isLowDemand(target)) weakTargetReasons.push("LOW DEMAND");
-if (target?.projected || target?.isProjected) weakTargetReasons.push("projected risk");
-
 let weakTargetDiscountPercent = 0;
 
-if (outgoingMostlyMediumPlus && weakTargetReasons.length) {
-  if (isLowDemand(target)) weakTargetDiscountPercent += 0.35;
-  if (target?.projected || target?.isProjected) weakTargetDiscountPercent += 0.25;
-
-  // Weak trend is only a warning now, not a discount.
-  weakTargetDiscountPercent = Math.min(0.45, weakTargetDiscountPercent);
+if (isLowDemand(target)) {
+  weakTargetReasons.push("LOW DEMAND");
+  weakTargetDiscountPercent += 0.35;
 }
+
+if (target?.projected || target?.isProjected) {
+  weakTargetReasons.push("projected risk");
+  weakTargetDiscountPercent += 0.25;
+}
+
+weakTargetDiscountPercent = Math.min(0.60, weakTargetDiscountPercent);
 
 const shapePatch = rotoriUpgradeShapePatch(giveCount, receiveCount);
 const shapeDiscountPercent = shapePatch.discountPercent;
 
-// Keep your weak-target logic, but add upgrade-shape room on top.
 const totalRoomDiscountPercent = Math.min(
-  0.70,
+  0.90,
   weakTargetDiscountPercent + shapeDiscountPercent
 );
 

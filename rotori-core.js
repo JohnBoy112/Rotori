@@ -1825,23 +1825,34 @@ const closeEnough = hasProjectedDowngradeRisk
     const giveCount = giving.length;
     const receiveCount = receiving.length;
 
-    let ignoredValuedOP = 0;
+ let ignoredValuedOP = 0;
+const countedOutgoingValuedOP = [];
 
 const effectivePay = sum(giving, item => {
   const base = effectiveMetric(item);
+  const itemValue = tradeMetric(item);
+  const manualOP = itemManualOP(item);
 
-  // Only count OP on outgoing items if they are at least 80%
-  // of the main target item.
-  const itemIsBigEnough = targetBase > 0 && tradeMetric(item) >= targetBase * 0.8;
+  const itemIsBigEnough =
+    targetBase > 0 &&
+    itemValue >= targetBase * 0.8;
 
   if (itemIsBigEnough) {
-    return base + itemManualOP(item);
+    if (item.isValued && manualOP > 0) {
+      countedOutgoingValuedOP.push({
+        name: itemLabel(item),
+        value: itemValue,
+        op: manualOP,
+        sizePercent: Math.round((itemValue / targetBase) * 100)
+      });
+    }
+
+    return base + manualOP;
   }
 
-  ignoredValuedOP += itemManualOP(item);
+  ignoredValuedOP += manualOP;
   return base;
 });
-
 const effectiveReceive = sum(receiving, effectiveMetric) + receivingRobux;
 
 const effectivePayWithRobux = effectivePay + givingRobux;
@@ -1943,6 +1954,11 @@ r.push(
 r.push(
   `You are paying about ${fmtNum(opPaid)} OP on the full trade. Rotori's starting OP limit for this target is ${fmtNum(normalMaxAllowedOp)} OP.`
 );
+for (const countedItem of countedOutgoingValuedOP) {
+  r.push(
+    `${countedItem.name}'s ${fmtNum(countedItem.op)} OP is included because its ${fmtNum(countedItem.value)} value is about ${fmtNum(countedItem.sizePercent)}% of ${itemLabel(target)}'s size, meeting Rotori's 80% requirement.`
+  );
+}
 
 if (shapePatch.reason) {
   r.push(

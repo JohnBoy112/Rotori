@@ -1883,22 +1883,43 @@ if (projectedGive.length && netAfterDeproj >= Math.max(500, Math.round(effective
 
    
 
+// Upgrade discount for weak target items.
+// If our outgoing side is mostly MEDIUM+ demand, and the target is weak,
+// Rotori lowers how much OP we are willing to pay.
+const outgoingMostlyMediumPlus = majorityAtLeastMediumDemand(giving);
+
 const weakTargetReasons = [];
-let weakTargetDiscountPercent = 0;
 
 if (isLowDemand(target)) {
   weakTargetReasons.push("LOW DEMAND");
-  weakTargetDiscountPercent += 0.35;
 }
 
 if (target?.projected || target?.isProjected) {
   weakTargetReasons.push("projected risk");
-  weakTargetDiscountPercent += 0.25;
 }
 
-weakTargetDiscountPercent = Math.min(0.60, weakTargetDiscountPercent);
+let weakTargetDiscountPercent = 0;
 
-const shapePatch = rotoriUpgradeShapePatch(giveCount, receiveCount);
+if (weakTargetReasons.length) {
+  if (isLowDemand(target)) {
+    weakTargetDiscountPercent += 0.35;
+  }
+
+  if (target?.projected || target?.isProjected) {
+    weakTargetDiscountPercent += 0.25;
+  }
+
+  weakTargetDiscountPercent = Math.min(
+    0.45,
+    weakTargetDiscountPercent
+  );
+}
+
+const shapePatch = rotoriUpgradeShapePatch(
+  giveCount,
+  receiveCount
+);
+
 const shapeDiscountPercent = shapePatch.discountPercent;
 
 const totalRoomDiscountPercent = Math.min(

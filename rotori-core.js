@@ -1653,7 +1653,9 @@ function analyzeTradeCore(givingRaw, receivingRaw, options = {}) {
   giving.rotoriRobux = givingRobux;
   receiving.rotoriRobux = receivingRobux;
 
-const blockedFaceItem = [...giving, ...receiving].find(isFaceBlockedItem);
+const blockedFaceItem = [...giving, ...receiving].find(item =>
+  isFaceBlockedItem(item) || isFaceLikeItem(item)
+);
 
 if (blockedFaceItem) {
   return baseResult({
